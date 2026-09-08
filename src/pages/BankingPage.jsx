@@ -1,0 +1,637 @@
+import React, { useMemo, useState } from "react";
+import { formatMoney, Input, Modal, MetricCard } from "../components/ui.jsx";
+import StudentPicker from "../components/StudentPicker.jsx";
+import { SearchBox, Pager } from "../components/SearchPager.jsx";
+import { usePagedList } from "../lib/usePagedList.js";
+import { downloadTemplate } from "../lib/templates.js";
+import { reconciliationSummary } from "../lib/reconcile.js";
+import { outstanding } from "../lib/fees.js";
+
+const ACCOUNTS = ["HDFC", "ICICI", "Cash", "Healthcare"];
+const BANK_ACCOUNTS = ["HDFC", "ICICI"];
+
+export default function BankingPage({
+  totals,
+  isAdmin,
+  students,
+  transfers,
+  collections,
+  expenses,
+  bankStatements,
+  bankLines,
+  busy,
+  transferForm,
+  setTransferForm,
+  onAddTransfer,
+  savingTransfer,
+  transferFormError,
+  onTransferFile,
+  onEditTransfer,
+  onDeleteTransfer,
+  onUploadStatement,
+  onClassifyLine,
+  onIgnoreLine,
+  onUnmatchLine,
+  onDeleteStatement,
+}) {
+  const [view, setView] = useState("transfers");
+
+  return (
+    <section className="page">
+      <div className="page-actions">
+        <div className="subtab-switch">
+          <button
+            className={view === "transfers" ? "subtab active" : "subtab"}
+            onClick={() => setView("transfers")}
+          >
+            Transfers
+          </button>
+          <button
+            className={view === "reconcile" ? "subtab active" : "subtab"}
+            onClick={() => setView("reconcile")}
+          >
+            Reconciliation
+          </button>
+        </div>
+      </div>
+
+      <div className="metric-grid four">
+        <MetricCard label="Cash Balance" value={formatMoney(totals.cashBalance)} tone="auto" amount={totals.cashBalance} />
+        <MetricCard label="HDFC Balance" value={formatMoney(totals.hdfcBalance)} tone="auto" amount={totals.hdfcBalance} />
+        <MetricCard label="ICICI Balance" value={formatMoney(totals.iciciBalance)} tone="auto" amount={totals.iciciBalance} />
+        <MetricCard
+          label={totals.healthcareBalance >= 0 ? "Healthcare Receivable" : "Healthcare Payable"}
+          value={formatMoney(Math.abs(totals.healthcareBalance))}
+          tone={totals.healthcareBalance >= 0 ? "pos" : "neg"}
+        />
+      </div>
+
+      {view === "transfers" ? (
+        <TransfersView
+          isAdmin={isAdmin}
+          transfers={transfers}
+          form={transferForm}
+          setForm={setTransferForm}
+          onSubmit={onAddTransfer}
+          saving={savingTransfer}
+          formError={transferFormError}
+          onFile={onTransferFile}
+          onEdit={onEditTransfer}
+          onDelete={onDeleteTransfer}
+        />
+      ) : (
+        <ReconcileView
+          isAdmin={isAdmin}
+          students={students}
+          data={{ collections, expenses, transfers }}
+          bankStatements={bankStatements}
+          bankLines={bankLines}
+          busy={busy}
+          onUploadStatement={onUploadStatement}
+          onClassifyLine={onClassifyLine}
+          onIgnoreLine={onIgnoreLine}
+          onUnmatchLine={onUnmatchLine}
+          onDeleteStatement={onDeleteStatement}
+        />
+      )}
+    </section>
+  );
+}
+
+/* ------------------------------ Transfers ------------------------------ */
+
+function TransfersView({ isAdmin, transfers, form, setForm, onSubmit, saving, formError, onFile, onEdit, onDelete }) {
+  const set = (patch) => setForm({ ...form, ...patch });
+  const [editing, setEditing] = useState(null);
+  const [rowBusy, setRowBusy] = useState(false);
+  const paged = usePagedList(transfers, {
+    searchFields: ["from_account", "to_account", "purpose", "reference", "note"],
+    pageSize: 20,
+  });
+
+  return (
+    <div className={isAdmin ? "two-column" : ""}>
+      {isAdmin && (
+        <div className="form-card">
+          <div className="card-heading between">
+            <div><h3>New Transfer</h3><p>Move money between accounts</p></div>
+            <div className="header-actions">
+              <button
+                className="button secondary small"
+                onClick={() =>
+                  downloadTemplate(
+                    "transfer_template.xlsx",
+                    ["Date", "From Account", "To Account", "Amount", "Purpose", "Reference", "Note"],
+                    ["2026-06-01", "Cash", "ICICI", 50000, "Cash deposit", "DEP-01", ""]
+                  )
+                }
+              >
+                Template
+              </button>
+              <label className="button secondary small">
+                Import
+                <input type="file" accept=".xlsx,.xls,.csv" onChange={onFile} hidden />
+              </label>
+            </div>
+          </div>
+          <form onSubmit={onSubmit}>
+            {formError && <div className="form-error-banner">{formError}</div>}
+            <Input label="Date" type="date" value={form.date} onChange={(v) => set({ date: v })} required />
+            <div className="field-row">
+              <div className="field">
+                <label>From Account</label>
+                <select value={form.from_account} onChange={(e) => set({ from_account: e.target.value })}>
+                  {ACCOUNTS.map((a) => <option key={a}>{a}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label>To Account</label>
+                <select value={form.to_account} onChange={(e) => set({ to_account: e.target.value })}>
+                  {ACCOUNTS.map((a) => <option key={a}>{a}</option>)}
+                </select>
+              </div>
+            </div>
+            <Input label="Amount" type="number" min="0.01" step="0.01" value={form.amount} onChange={(v) => set({ amount: v })} required />
+            <Input label="Purpose" placeholder="e.g. Cash deposit, Account opening payment, Healthcare repayment" value={form.purpose} onChange={(v) => set({ purpose: v })} />
+            <Input label="Reference No." value={form.reference} onChange={(v) => set({ reference: v })} />
+            <Input label="Note" value={form.note} onChange={(v) => set({ note: v })} />
+            <div className="info-box">
+              <strong>Not income or expense</strong>
+              <span>A transfer only moves the balance between accounts — Net P&amp;L is unchanged.</span>
+            </div>
+            <button className="button primary full" type="submit" disabled={saving}>
+              {saving ? "Saving..." : "Record Transfer"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      <div className="table-card">
+        <div className="card-heading">
+          <div><h3>Transfer History</h3><p>All account-to-account movements</p></div>
+        </div>
+        <div className="toolbar">
+          <SearchBox value={paged.query} onChange={paged.setQuery} placeholder="Search account, purpose, reference..." />
+          <Pager
+            page={paged.page}
+            totalPages={paged.totalPages}
+            onPageChange={paged.setPage}
+            filteredCount={paged.filteredCount}
+            totalCount={paged.totalCount}
+          />
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th><th>From</th><th>To</th><th>Amount</th>
+              <th>Purpose</th><th>Reference</th>{isAdmin && <th></th>}
+            </tr>
+          </thead>
+          <tbody>
+            {paged.pageRows.length === 0 && (
+              <tr><td colSpan={isAdmin ? 7 : 6} className="table-empty">No transfers recorded yet.</td></tr>
+            )}
+            {paged.pageRows.map((t) => (
+              <tr key={t.id}>
+                <td>{t.date}</td>
+                <td><span className="mini-tag">{t.from_account}</span></td>
+                <td><span className="mini-tag">{t.to_account}</span></td>
+                <td>{formatMoney(t.amount)}</td>
+                <td>{t.purpose}</td>
+                <td>{t.reference}</td>
+                {isAdmin && (
+                  <td className="row-actions">
+                    <button className="button secondary small" onClick={() => setEditing(t)}>Edit</button>
+                    <button
+                      className="button ghost small danger"
+                      onClick={() => {
+                        if (window.confirm(`Delete this transfer (${formatMoney(t.amount)})?`)) onDelete(t.id);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {editing && (
+        <Modal title="Edit Transfer" onClose={() => setEditing(null)}>
+          <EditTransferForm
+            row={editing}
+            busy={rowBusy}
+            onCancel={() => setEditing(null)}
+            onSave={async (patch) => {
+              setRowBusy(true);
+              try {
+                await onEdit(editing.id, patch);
+                setEditing(null);
+              } finally {
+                setRowBusy(false);
+              }
+            }}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function EditTransferForm({ row, busy, onCancel, onSave }) {
+  const [f, setF] = useState({
+    date: row.date,
+    from_account: row.from_account,
+    to_account: row.to_account,
+    amount: row.amount,
+    purpose: row.purpose || "",
+    reference: row.reference || "",
+    note: row.note || "",
+  });
+  const set = (p) => setF({ ...f, ...p });
+  return (
+    <form className="form-grid" onSubmit={(e) => { e.preventDefault(); onSave(f); }}>
+      <Input label="Date" type="date" value={f.date} onChange={(v) => set({ date: v })} required />
+      <div className="field">
+        <label>From Account</label>
+        <select value={f.from_account} onChange={(e) => set({ from_account: e.target.value })}>
+          {ACCOUNTS.map((a) => <option key={a}>{a}</option>)}
+        </select>
+      </div>
+      <div className="field">
+        <label>To Account</label>
+        <select value={f.to_account} onChange={(e) => set({ to_account: e.target.value })}>
+          {ACCOUNTS.map((a) => <option key={a}>{a}</option>)}
+        </select>
+      </div>
+      <Input label="Amount" type="number" min="0.01" step="0.01" value={f.amount} onChange={(v) => set({ amount: v })} required />
+      <Input label="Purpose" value={f.purpose} onChange={(v) => set({ purpose: v })} />
+      <Input label="Reference No." value={f.reference} onChange={(v) => set({ reference: v })} />
+      <Input label="Note" value={f.note} onChange={(v) => set({ note: v })} />
+      <div className="form-actions">
+        <button type="button" className="button secondary" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button type="submit" className="button primary" disabled={busy}>{busy ? "Saving..." : "Save changes"}</button>
+      </div>
+    </form>
+  );
+}
+
+/* --------------------------- Reconciliation --------------------------- */
+
+function ReconcileView({
+  isAdmin,
+  students,
+  data,
+  bankStatements,
+  bankLines,
+  busy,
+  onUploadStatement,
+  onClassifyLine,
+  onIgnoreLine,
+  onUnmatchLine,
+  onDeleteStatement,
+}) {
+  const [account, setAccount] = useState("ICICI");
+  const [openId, setOpenId] = useState(null);
+  const [classifying, setClassifying] = useState(null); // a line row
+
+  const linesByStatement = useMemo(() => {
+    const map = new Map();
+    bankLines.forEach((l) => {
+      if (!map.has(l.statement_id)) map.set(l.statement_id, []);
+      map.get(l.statement_id).push(l);
+    });
+    return map;
+  }, [bankLines]);
+
+  const onFile = (e) => {
+    const file = e.target.files[0];
+    if (file) onUploadStatement(account, file);
+    e.target.value = "";
+  };
+
+  return (
+    <div className="recon">
+      {isAdmin && (
+        <div className="form-card recon-upload">
+          <div className="card-heading">
+            <div><h3>Upload Bank Statement</h3><p>Excel export from the bank (.xlsx / .csv)</p></div>
+          </div>
+          <div className="field-row">
+            <div className="field">
+              <label>Account</label>
+              <select value={account} onChange={(e) => setAccount(e.target.value)}>
+                {BANK_ACCOUNTS.map((a) => <option key={a}>{a}</option>)}
+              </select>
+            </div>
+            <label className="button primary upload-btn">
+              {busy ? "Working..." : "Choose file & upload"}
+              <input type="file" accept=".xlsx,.xls,.csv" onChange={onFile} hidden disabled={busy} />
+            </label>
+          </div>
+          <div className="info-box">
+            <strong>How matching works</strong>
+            <span>
+              Each statement line is auto-matched to a fee collection, expense or transfer by
+              date and amount. Unmatched lines are classified by hand — that creates the missing
+              record. When nothing is left unmatched, the book balance equals the bank balance.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {bankStatements.length === 0 && (
+        <div className="empty-state">
+          <div className="empty-icon">▣</div>
+          <h3>No statements uploaded</h3>
+          <p>Upload a bank statement to start reconciling.</p>
+        </div>
+      )}
+
+      {bankStatements.map((st) => {
+        const lines = (linesByStatement.get(st.id) || []).slice().sort((a, b) => {
+          if (a.txn_date !== b.txn_date) return a.txn_date < b.txn_date ? -1 : 1;
+          return (a.seq || 0) - (b.seq || 0);
+        });
+        const summary = reconciliationSummary(st, lines, data);
+        const isOpen = openId === st.id;
+
+        return (
+          <div className="table-card recon-statement" key={st.id}>
+            <div className="card-heading between">
+              <div>
+                <h3>
+                  {st.account} · {st.period_start} → {st.period_end}{" "}
+                  {summary.reconciled ? (
+                    <span className="mini-tag ok">Reconciled</span>
+                  ) : (
+                    <span className="mini-tag warn">{summary.openCount} unmatched</span>
+                  )}
+                </h3>
+                <p>{st.file_name}</p>
+              </div>
+              <div className="header-actions">
+                <button className="button secondary small" onClick={() => setOpenId(isOpen ? null : st.id)}>
+                  {isOpen ? "Hide lines" : "Show lines"}
+                </button>
+                {isAdmin && (
+                  <button
+                    className="button secondary small danger"
+                    onClick={() => {
+                      if (window.confirm("Delete this statement and all its lines? Records already created stay.")) {
+                        onDeleteStatement(st.id);
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="summary-grid three recon-summary">
+              <MetricCard label="Statement closing" value={formatMoney(summary.statementClosing)} tone="auto" amount={summary.statementClosing} />
+              <MetricCard label="Book balance (as of end date)" value={formatMoney(summary.bookBalance)} tone="auto" amount={summary.bookBalance} />
+              <MetricCard
+                label="Difference"
+                value={formatMoney(summary.difference)}
+                tone={Math.round(summary.difference) === 0 ? "pos" : "neg"}
+              />
+            </div>
+
+            {isOpen && (
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th><th>Date</th><th>Description</th>
+                    <th>Withdrawal</th><th>Deposit</th><th>Status</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((ln) => (
+                    <tr key={ln.id} className={ln.status === "unmatched" ? "row-open" : ""}>
+                      <td>{ln.seq}</td>
+                      <td>{ln.txn_date}</td>
+                      <td className="desc-cell">{ln.description}</td>
+                      <td className="amount-negative">{ln.withdrawal ? formatMoney(ln.withdrawal) : ""}</td>
+                      <td className="amount-positive">{ln.deposit ? formatMoney(ln.deposit) : ""}</td>
+                      <td><StatusTag status={ln.status} kind={ln.match_kind} /></td>
+                      <td className="row-actions">
+                        {isAdmin && ln.status === "unmatched" && (
+                          <>
+                            <button className="button secondary small" onClick={() => setClassifying(ln)}>
+                              Classify
+                            </button>
+                            <button className="button ghost small" onClick={() => onIgnoreLine(ln, true)}>
+                              Ignore
+                            </button>
+                          </>
+                        )}
+                        {isAdmin && ln.status === "ignored" && (
+                          <button className="button ghost small" onClick={() => onIgnoreLine(ln, false)}>
+                            Un-ignore
+                          </button>
+                        )}
+                        {isAdmin && (ln.status === "matched" || ln.status === "classified") && (
+                          <button
+                            className="button ghost small danger"
+                            onClick={() => {
+                              const created = ln.status === "classified" && ln.match_id;
+                              const msg = created
+                                ? `Unmatch this line and DELETE the ${ln.match_kind} it created?`
+                                : "Unmatch this line? (the existing record is kept)";
+                              if (window.confirm(msg)) onUnmatchLine(ln, { deleteRecord: !!created });
+                            }}
+                          >
+                            Unmatch
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })}
+
+      {classifying && (
+        <ClassifyModal
+          line={classifying}
+          students={students}
+          data={data}
+          busy={busy}
+          onClose={() => setClassifying(null)}
+          onSubmit={async (input) => {
+            try {
+              await onClassifyLine(classifying, input);
+              setClassifying(null);
+            } catch {
+              /* error is surfaced by the page-level banner */
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function StatusTag({ status, kind }) {
+  if (status === "matched") return <span className="mini-tag ok">Matched · {kind}</span>;
+  if (status === "classified") return <span className="mini-tag ok">Added · {kind}</span>;
+  if (status === "ignored") return <span className="mini-tag">Ignored</span>;
+  return <span className="mini-tag warn">Unmatched</span>;
+}
+
+function ClassifyModal({ line, students, data, busy, onClose, onSubmit }) {
+  const isDeposit = Number(line.deposit) > 0;
+  const amount = isDeposit ? Number(line.deposit) : Number(line.withdrawal);
+  const [kind, setKind] = useState(isDeposit ? "collection" : "expense");
+  const [studentId, setStudentId] = useState("");
+  const [type, setType] = useState("Course Fee");
+  const [category, setCategory] = useState("Bank Charge");
+  const [description, setDescription] = useState(line.description || "");
+  const [otherAccount, setOtherAccount] = useState(line.account === "ICICI" ? "HDFC" : "ICICI");
+  const [purpose, setPurpose] = useState(line.description || (isDeposit ? "Cash deposit" : "Transfer"));
+  const [linkId, setLinkId] = useState("");
+
+  const matchedStudent = students.find(
+    (s) => s.id === studentId || s.name.toLowerCase() === String(studentId).toLowerCase()
+  );
+  const studentBalance = matchedStudent
+    ? outstanding(
+        matchedStudent,
+        (data.collections || [])
+          .filter((c) => c.student_id === matchedStudent.id)
+          .reduce((s, c) => s + Number(c.amount || 0), 0)
+      )
+    : null;
+
+  // Candidate existing records to link this line to (same account, right
+  // direction, unmatched), closest amount first.
+  const candidates = (isDeposit
+    ? (data.collections || []).filter((c) => c.account === line.account)
+    : (data.expenses || []).filter((e) => e.account === line.account)
+  )
+    .map((r) => ({
+      id: r.id,
+      linkKind: isDeposit ? "collection" : "expense",
+      label: isDeposit
+        ? `${r.date} · ${r.student_name} · ${formatMoney(r.amount)}`
+        : `${r.date} · ${r.category} · ${formatMoney(r.amount)}`,
+      diff: Math.abs(Number(r.amount) - amount),
+    }))
+    .sort((a, b) => a.diff - b.diff)
+    .slice(0, 25);
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (kind === "link") {
+      const c = candidates.find((x) => String(x.id) === String(linkId));
+      if (c) onSubmit({ kind: "link", linkKind: c.linkKind, linkId: c.id });
+    } else if (kind === "collection") onSubmit({ kind, studentId, type });
+    else if (kind === "expense") onSubmit({ kind, category, description });
+    else onSubmit({ kind, otherAccount, purpose });
+  };
+
+  return (
+    <Modal title="Classify statement line" onClose={onClose}>
+      <form className="form-grid" onSubmit={submit}>
+        <div className="classify-summary">
+          <span>{line.txn_date}</span>
+          <strong>{formatMoney(amount)} {isDeposit ? "in" : "out"}</strong>
+          <span className="desc-cell">{line.description}</span>
+        </div>
+
+        <div className="field">
+          <label>Record as</label>
+          <select value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="collection">New fee collection</option>
+            <option value="expense">New expense</option>
+            <option value="transfer">New transfer</option>
+            <option value="link">Link to an existing record</option>
+          </select>
+        </div>
+
+        {kind === "link" && (
+          <div className="field">
+            <label>Existing {isDeposit ? "fee collection" : "expense"} ({line.account})</label>
+            <select value={linkId} onChange={(e) => setLinkId(e.target.value)} required>
+              <option value="">— choose —</option>
+              {candidates.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}{c.diff === 0 ? "  ✓ exact" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {kind === "collection" && (
+          <>
+            <div className="field">
+              <label>Student</label>
+              <StudentPicker students={students} value={studentId} onChange={setStudentId} required />
+            </div>
+            <div className="field">
+              <label>Type</label>
+              <select value={type} onChange={(e) => setType(e.target.value)}>
+                <option>Registration Fee</option>
+                <option>Course Fee</option>
+                <option>Exam Fee</option>
+                <option>Other Fee</option>
+              </select>
+            </div>
+            {studentId && !matchedStudent && <div className="field-error">No matching student</div>}
+            {matchedStudent && (
+              <div className="info-box">
+                <strong>{matchedStudent.name}</strong>
+                <span>
+                  Outstanding now {formatMoney(studentBalance)} → after this payment{" "}
+                  {formatMoney(Math.max(0, studentBalance - amount))}
+                </span>
+              </div>
+            )}
+          </>
+        )}
+
+        {kind === "expense" && (
+          <>
+            <Input label="Category" value={category} onChange={setCategory} required />
+            <Input label="Description" value={description} onChange={setDescription} />
+            <div className="info-box"><span>Account will be set to {line.account}.</span></div>
+          </>
+        )}
+
+        {kind === "transfer" && (
+          <>
+            <div className="field">
+              <label>{isDeposit ? "Money came from" : "Money went to"}</label>
+              <select value={otherAccount} onChange={(e) => setOtherAccount(e.target.value)}>
+                {ACCOUNTS.filter((a) => a !== line.account).map((a) => <option key={a}>{a}</option>)}
+              </select>
+            </div>
+            <Input label="Purpose" value={purpose} onChange={setPurpose} />
+            <div className="info-box">
+              <span>
+                {isDeposit
+                  ? `Transfer ${otherAccount} → ${line.account}`
+                  : `Transfer ${line.account} → ${otherAccount}`}
+              </span>
+            </div>
+          </>
+        )}
+
+        <div className="form-actions">
+          <button type="button" className="button secondary" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="submit" className="button primary" disabled={busy}>
+            {busy ? "Saving..." : kind === "link" ? "Match" : "Create & match"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
