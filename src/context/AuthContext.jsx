@@ -1,14 +1,11 @@
 import React, {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useState,
 } from "react";
 import { supabase } from "../lib/supabaseClient.js";
 import { getAccess } from "../lib/access.js";
-
-const AuthContext = createContext(null);
+import { AuthContext } from "./authContext.js";
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
@@ -110,11 +107,15 @@ export function AuthProvider({ children }) {
     profile,
     profileError,
     loading,
-    isAdmin: profile?.role === "admin" && profile?.is_approved,
-    isApprovedStaff: profile?.role === "staff" && profile?.is_approved,
+    isAdmin:
+      (profile?.role === "admin" || profile?.role === "super_admin") &&
+      !!profile?.is_approved,
+    isApprovedStaff: profile?.role === "staff" && !!profile?.is_approved,
     canViewFinancials:
       !!profile?.is_approved &&
-      (profile?.role === "admin" || !!profile?.can_view_financials),
+      (profile?.role === "admin" ||
+        profile?.role === "super_admin" ||
+        !!profile?.can_view_financials),
     access: getAccess(profile),
     signIn,
     signUp,
@@ -127,12 +128,4 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used inside an AuthProvider");
-  }
-  return ctx;
 }

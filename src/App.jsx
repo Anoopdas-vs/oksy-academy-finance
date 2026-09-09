@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import "./App.css";
 
-import { useAuth } from "./context/AuthContext.jsx";
+import { useAuth } from "./context/useAuth.js";
 import Login from "./components/Login.jsx";
 import ImportPreviewModal from "./components/ImportPreviewModal.jsx";
-import { today } from "./components/ui.jsx";
+import { today } from "./lib/format.js";
 import PeriodFilter from "./components/PeriodFilter.jsx";
 import { resolvePeriod, inRange, periodLabel } from "./lib/period.js";
 import {
@@ -122,7 +122,7 @@ export default function App() {
     return (
       <FullScreenMessage
         title="Waiting for approval"
-        text="Your account has been created. An Oksy Academy admin needs to approve your access before you can use the finance console."
+        text="Your account has been created. An Oksy Academy admin needs to approve your access before you can use the academy portal."
         action={{ label: "Sign out", onClick: signOut }}
       />
     );
@@ -1205,7 +1205,7 @@ function AppShell() {
 
           <div className="brand-footer">
             <strong>Oksy Academy</strong>
-            <span>Finance Console v1.0</span>
+            <span>Academy Portal v2.0</span>
             <span>Education for a Brighter Tomorrow</span>
           </div>
         </div>

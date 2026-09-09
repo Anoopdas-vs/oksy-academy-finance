@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useAuth } from "../context/AuthContext.jsx";
+import { useAuth } from "../context/useAuth.js";
 
 export default function Login() {
   const { signIn, signInWithGoogle, resetPassword } = useAuth();
@@ -48,7 +48,7 @@ export default function Login() {
         <div className="auth-welcome">
           <img src="/oksy-logo.jpeg" alt="Oksy Academy" />
           <h1>Welcome to Oksy Academy</h1>
-          <p>Finance Console — sign in to continue</p>
+          <p>Academy Portal — sign in to continue</p>
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>

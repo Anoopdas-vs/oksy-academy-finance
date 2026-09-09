@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { formatMoney, Input, Modal } from "../components/ui.jsx";
+import { Input, Modal } from "../components/ui.jsx";
+import { formatMoney } from "../lib/format.js";
 import { SearchBox, Pager } from "../components/SearchPager.jsx";
 import { usePagedList } from "../lib/usePagedList.js";
 import { downloadTemplate } from "../lib/templates.js";

@@ -1,5 +1,5 @@
 import React from "react";
-import { formatMoney } from "./ui.jsx";
+import { formatMoney } from "../lib/format.js";
 
 // Fee receipt shown after a collection is recorded. It confirms ONE payment.
 // The fee-account summary below it is informational only.

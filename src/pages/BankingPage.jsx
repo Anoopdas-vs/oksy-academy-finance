@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { formatMoney, Input, Modal, MetricCard } from "../components/ui.jsx";
+import { Input, Modal, MetricCard } from "../components/ui.jsx";
+import { formatMoney } from "../lib/format.js";
 import StudentPicker from "../components/StudentPicker.jsx";
 import { SearchBox, Pager } from "../components/SearchPager.jsx";
 import { usePagedList } from "../lib/usePagedList.js";

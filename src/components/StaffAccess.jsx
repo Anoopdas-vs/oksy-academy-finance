@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
-import { useAuth } from "../context/AuthContext.jsx";
+import { useAuth } from "../context/useAuth.js";
 import { ASSIGNABLE_ROLES, ROLE_LABEL } from "../lib/access.js";
 
 export default function StaffAccess() {
@@ -10,24 +10,28 @@ export default function StaffAccess() {
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState(null);
 
-  const load = async () => {
-    setLoading(true);
-    const { data, error: fetchError } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (fetchError) {
-      setError(fetchError.message);
-    } else {
-      setError("");
-      setRows(data || []);
-    }
-    setLoading(false);
-  };
-
   useEffect(() => {
+    let ignore = false;
+    async function load() {
+      const { data, error: fetchError } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!ignore) {
+        if (fetchError) {
+          setError(fetchError.message);
+        } else {
+          setError("");
+          setRows(data || []);
+        }
+        setLoading(false);
+      }
+    }
     load();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const updateRow = async (id, patch) => {

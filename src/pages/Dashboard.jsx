@@ -11,7 +11,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { formatMoney } from "../components/ui.jsx";
+import { formatMoney } from "../lib/format.js";
 import { effectiveFeeDue, outstanding } from "../lib/fees.js";
 
 /* ------------------------------- helpers ------------------------------- */

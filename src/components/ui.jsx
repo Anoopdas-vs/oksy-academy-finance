@@ -1,14 +1,5 @@
 import React from "react";
 
-export const formatMoney = (value) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value || 0);
-
-export const today = () => new Date().toISOString().slice(0, 10);
-
 // Colour of the figure:
 //   tone="pos" | "neg"  → force green / red
 //   tone="auto"         → green when `amount` >= 0, red when < 0

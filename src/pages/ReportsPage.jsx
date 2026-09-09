@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { formatMoney } from "../components/ui.jsx";
+import { formatMoney } from "../lib/format.js";
 import { SearchBox } from "../components/SearchPager.jsx";
 import { REPORTS, exportReportToXlsx } from "../lib/reports.js";
 import { STAFF_REPORT_IDS } from "../lib/access.js";

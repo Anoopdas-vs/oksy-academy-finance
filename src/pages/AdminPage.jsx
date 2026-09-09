@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { formatMoney, Input, Modal } from "../components/ui.jsx";
+import { Input, Modal } from "../components/ui.jsx";
+import { formatMoney } from "../lib/format.js";
 import StaffAccess from "../components/StaffAccess.jsx";
 import {
   ALL_AREAS,
