@@ -23,6 +23,11 @@ export const roleLabel = (role) => ROLE_LABEL[role] || role || "—";
 
 export const ALL_AREAS = [
   "Pulse",
+  "Timetable",
+  "Live Class",
+  "Assignments",
+  "Exams",
+  "Reviews",
   "Enrollment",
   "Fee Collection",
   "Expenses",
@@ -31,14 +36,36 @@ export const ALL_AREAS = [
   "Admin",
 ];
 
-// Sensible defaults when nothing has been configured yet. The three new roles
-// start with no access — the Owner grants areas later in Admin → Access.
+// Sensible defaults for all roles across the Academy Suite.
 export const DEFAULT_ROLE_AREAS = {
-  admin: ["Pulse", "Enrollment", "Fee Collection", "Expenses", "Banking", "Reports", "Admin"],
-  staff: ["Pulse", "Enrollment", "Fee Collection", "Expenses", "Reports", "Admin"],
-  student: [],
-  faculty: [],
-  professional: [],
+  admin: [
+    "Pulse",
+    "Timetable",
+    "Live Class",
+    "Assignments",
+    "Exams",
+    "Reviews",
+    "Enrollment",
+    "Fee Collection",
+    "Expenses",
+    "Banking",
+    "Reports",
+    "Admin",
+  ],
+  faculty: ["Pulse", "Timetable", "Live Class", "Assignments", "Exams", "Reviews"],
+  student: ["Pulse", "Timetable", "Live Class", "Assignments", "Exams", "Reviews"],
+  staff: [
+    "Pulse",
+    "Timetable",
+    "Live Class",
+    "Assignments",
+    "Enrollment",
+    "Fee Collection",
+    "Expenses",
+    "Reports",
+    "Admin",
+  ],
+  professional: ["Pulse", "Timetable", "Live Class", "Assignments", "Exams", "Reviews"],
 };
 
 // Reports a non-admin role may open (Admin/Owner open all).

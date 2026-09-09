@@ -71,13 +71,23 @@ import ExpensesPage from "./pages/ExpensesPage.jsx";
 import BankingPage from "./pages/BankingPage.jsx";
 import ReportsPage from "./pages/ReportsPage.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
+import TimetablePage from "./pages/TimetablePage.jsx";
+import LiveClassPage from "./pages/LiveClassPage.jsx";
+import AssignmentsPage from "./pages/AssignmentsPage.jsx";
+import ExamsPage from "./pages/ExamsPage.jsx";
+import ReviewsPage from "./pages/ReviewsPage.jsx";
 import Receipt from "./components/Receipt.jsx";
 
 const HOME = "Pulse"; // dashboard tab name
 
-// Topbar heading per tab (the only page title now — pages no longer repeat it).
+// Topbar heading per tab
 const TAB_TITLES = {
   Pulse: "Academy Pulse",
+  Timetable: "Class Timetable & Schedule",
+  "Live Class": "Online Classroom",
+  Assignments: "Projects & Assignments",
+  Exams: "Examinations & Quizzes",
+  Reviews: "Faculty & Course Reviews",
   Enrollment: "Student Enrollment",
   "Fee Collection": "Fee Collection",
   Expenses: "Expenses",
@@ -88,6 +98,11 @@ const TAB_TITLES = {
 
 const NAV_BASE = [
   { key: HOME, icon: "◎" },
+  { key: "Timetable", icon: "📅" },
+  { key: "Live Class", icon: "🎥" },
+  { key: "Assignments", icon: "📋" },
+  { key: "Exams", icon: "📝" },
+  { key: "Reviews", icon: "⭐" },
   { key: "Enrollment", icon: "♙" },
   { key: "Fee Collection", icon: "₹" },
   { key: "Expenses", icon: "−" },
@@ -222,6 +237,7 @@ function AppShell() {
 
   // Fee receipt to show/print after a collection is recorded.
   const [receipt, setReceipt] = useState(null);
+  const [liveClassInfo, setLiveClassInfo] = useState(null);
 
   // Global top-bar period filter: { preset, start, end }. Drives the money
   // views (Dashboard financials + chart, Fee Collection & Expenses lists).
@@ -1262,6 +1278,41 @@ function AppShell() {
             fullDashboard={access.fullDashboard}
             onNavigate={setActiveTab}
           />
+        )}
+
+        {activeTab === "Timetable" && (
+          <TimetablePage
+            isAdmin={isAdmin}
+            batches={batches}
+            onNavigateToClass={(subject, link) => {
+              setLiveClassInfo({ subject, link });
+              setActiveTab("Live Class");
+            }}
+          />
+        )}
+
+        {activeTab === "Live Class" && (
+          <LiveClassPage
+            initialRoom={liveClassInfo?.link}
+            initialTitle={liveClassInfo?.subject}
+          />
+        )}
+
+        {activeTab === "Assignments" && (
+          <AssignmentsPage
+            isAdmin={isAdmin}
+            batches={batches}
+          />
+        )}
+
+        {activeTab === "Exams" && (
+          <ExamsPage
+            isAdmin={isAdmin}
+          />
+        )}
+
+        {activeTab === "Reviews" && (
+          <ReviewsPage />
         )}
 
         {activeTab === "Enrollment" && (
