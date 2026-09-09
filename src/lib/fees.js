@@ -23,6 +23,16 @@ export function effectiveFeeDue(student, collectedForStudent) {
 export const outstanding = (student, collectedForStudent) =>
   Math.max(0, effectiveFeeDue(student, collectedForStudent) - collectedForStudent);
 
+// The flip side of outstanding(): how much MORE than they owe a student has
+// paid (0 when they owe money or are paid up exactly). Outstanding is
+// correctly clamped at 0 so one student's overpayment can never net against
+// another student's unrelated dues — but that clamping was also silently
+// hiding the overpayment itself, with nothing anywhere flagging a possible
+// duplicate payment or data-entry mistake. This is for display only; it is
+// never summed into expected/outstanding totals.
+export const creditBalance = (student, collectedForStudent) =>
+  Math.max(0, collectedForStudent - effectiveFeeDue(student, collectedForStudent));
+
 // When a student is set to Dropped, raise their waiver enough to zero the
 // remaining balance (never lowers an existing waiver).
 export function waiverForDrop(student, collectedForStudent) {

@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import { inRange } from "./period.js";
-import { grossFee, effectiveFeeDue, outstanding } from "./fees.js";
+import { grossFee, effectiveFeeDue, outstanding, creditBalance } from "./fees.js";
 
 const sum = (rows, f = (r) => r.amount) => rows.reduce((s, r) => s + Number(f(r) || 0), 0);
 const within = (rows, range) => (range ? rows.filter((r) => inRange(r.date, range)) : rows);
@@ -147,7 +147,7 @@ export const REPORTS = [
     downloadable: true,
     filters: [
       { key: "status", label: "Status", options: ["All", "Registered", "Active", "Completed", "Dropped"] },
-      { key: "only", label: "Show", options: ["With balance", "Everyone"] },
+      { key: "only", label: "Show", options: ["With balance", "With credit", "Everyone"] },
     ],
     build({ students, collections }, f) {
       const paid = collections.reduce((m, c) => {
@@ -166,11 +166,21 @@ export const REPORTS = [
           net: effectiveFeeDue(s, collected),
           collected,
           balance: outstanding(s, collected),
+          // Display-only — the flip side of `balance`'s Math.max(0, ...)
+          // clamp. Never summed into totals; flags a possible overpayment
+          // or duplicate payment for someone to check.
+          credit: creditBalance(s, collected),
         };
       });
       if (f.status && f.status !== "All") rows = rows.filter((r) => r.status === f.status);
+      // Credit total reflects everyone matching the Status filter, regardless
+      // of the Show filter below — so "outstanding" and "credit" in the
+      // summary always describe the same population, not just whichever
+      // subset happens to be listed in the table.
+      const creditTotal = sum(rows, (r) => r.credit);
       if ((f.only || "With balance") === "With balance") rows = rows.filter((r) => r.balance > 0);
-      rows.sort((a, b) => b.balance - a.balance);
+      if (f.only === "With credit") rows = rows.filter((r) => r.credit > 0);
+      rows.sort((a, b) => b.balance - a.balance || b.credit - a.credit);
       return {
         columns: [
           { key: "id", label: "ID" },
@@ -180,9 +190,12 @@ export const REPORTS = [
           { key: "net", label: "Net Fee", money: true },
           { key: "collected", label: "Collected", money: true },
           { key: "balance", label: "Balance", money: true },
+          { key: "credit", label: "Credit", money: true },
         ],
         rows,
-        summary: `${rows.length} student(s) · outstanding ${fmt(sum(rows, (r) => r.balance))}`,
+        summary:
+          `${rows.length} student(s) · outstanding ${fmt(sum(rows, (r) => r.balance))}` +
+          (creditTotal > 0 ? ` · credit ${fmt(creditTotal)} (review for duplicate payments)` : ""),
       };
     },
   },

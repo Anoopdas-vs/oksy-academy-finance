@@ -100,6 +100,19 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut();
   }, []);
 
+  // Used by the forced-password-change screen (profile.must_change_password
+  // — see finding M6). Sets the new password, then clears the flag via a
+  // narrow SECURITY DEFINER function (never a direct profile update — see
+  // migration 10's comment for why) so the rest of the app unlocks.
+  const changePassword = useCallback(async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return { error };
+    const { error: rpcError } = await supabase.rpc("clear_my_must_change_password");
+    if (rpcError) return { error: rpcError };
+    await loadProfile(session?.user?.id);
+    return { error: null };
+  }, [loadProfile, session]);
+
   const refreshProfile = useCallback(() => {
     return loadProfile(session?.user?.id);
   }, [loadProfile, session]);
@@ -120,6 +133,7 @@ export function AuthProvider({ children }) {
     signUp,
     signInWithGoogle,
     resetPassword,
+    changePassword,
     signOut,
     refreshProfile,
   };

@@ -3,7 +3,7 @@ import { formatMoney, Input, LockedValue, Modal } from "../components/ui.jsx";
 import { SearchBox, Pager } from "../components/SearchPager.jsx";
 import { usePagedList } from "../lib/usePagedList.js";
 import { downloadTemplate } from "../lib/templates.js";
-import { outstanding as outstandingFor } from "../lib/fees.js";
+import { outstanding as outstandingFor, creditBalance as creditFor } from "../lib/fees.js";
 import StudentPicker from "../components/StudentPicker.jsx";
 
 const ACCOUNTS = ["HDFC", "ICICI", "Cash", "Healthcare"];
@@ -50,6 +50,9 @@ export default function FeeCollectionPage({
   const outstandingForMatched = matchedStudent
     ? outstandingFor(matchedStudent, paidByStudent(matchedStudent.id))
     : null;
+  const creditForMatched = matchedStudent
+    ? creditFor(matchedStudent, paidByStudent(matchedStudent.id))
+    : 0;
 
   return (
     <section className="page">
@@ -87,6 +90,11 @@ export default function FeeCollectionPage({
                   <>
                     <strong>{matchedStudent.name}</strong>
                     <span>Outstanding balance: {formatMoney(outstandingForMatched)}</span>
+                    {creditForMatched > 0 && (
+                      <span className="amount-positive">
+                        Credit balance: {formatMoney(creditForMatched)} (paid more than the fee due — check for a duplicate payment)
+                      </span>
+                    )}
                   </>
                 ) : (
                   <span>No matching student found for "{form.studentId}"</span>
@@ -160,14 +168,18 @@ export default function FeeCollectionPage({
               <tr>
                 <th>Receipt</th><th>Date</th><th>Student</th><th>Type</th>
                 <th>A/C</th>
-                <th>Amount</th><th>Outstanding</th>{showActions && <th></th>}
+                <th>Amount</th><th>Outstanding</th><th>Credit</th>{showActions && <th></th>}
               </tr>
             </thead>
             <tbody>
               {paged.pageRows.map((item) => {
                 const student = students.find((s) => s.id === item.student_id);
+                const paidForItemStudent = paidByStudent(item.student_id);
                 const outstanding = student
-                  ? outstandingFor(student, paidByStudent(item.student_id))
+                  ? outstandingFor(student, paidForItemStudent)
+                  : 0;
+                const credit = student
+                  ? creditFor(student, paidForItemStudent)
                   : 0;
 
                 return (
@@ -189,6 +201,13 @@ export default function FeeCollectionPage({
                     </td>
                     <td className="amount-positive">{formatMoney(item.amount)}</td>
                     <td>{formatMoney(outstanding)}</td>
+                    <td>
+                      {credit > 0 ? (
+                        <span className="amount-positive">{formatMoney(credit)}</span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     {showActions && (
                       <td className="row-actions">
                         {canEdit && (

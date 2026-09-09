@@ -48,10 +48,14 @@ export async function bulkUpsertStudents(students, userId) {
 
 // -------- Fee collections --------
 
-export async function fetchCollections(canViewFinancials) {
-  const table = canViewFinancials ? "collections" : "collections_basic";
+// Always read the masked view, never the base table: collections_basic
+// decides server-side (via can_view_financials()) whether to reveal the
+// real `account` value for the querying user, so the frontend doesn't need
+// to — and, as of migration 06, the base table's own SELECT grant has been
+// revoked for `authenticated`, so querying it directly would fail anyway.
+export async function fetchCollections() {
   const { data, error } = await supabase
-    .from(table)
+    .from("collections_basic")
     .select("*")
     .order("date", { ascending: false });
   if (error) throw error;
@@ -59,10 +63,13 @@ export async function fetchCollections(canViewFinancials) {
 }
 
 export async function insertCollection(collection, userId) {
+  // Only `id` is requested back (for the receipt number): the base table's
+  // SELECT grant for `authenticated` covers just that one column (see
+  // migration 06), so a bare `.select()` here would fail.
   const { data, error } = await supabase
     .from("collections")
     .insert({ ...collection, created_by: userId })
-    .select()
+    .select("id")
     .single();
   if (error) throw error;
   return data;

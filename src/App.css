@@ -1859,6 +1859,11 @@ tfoot td {
   color: var(--purple) !important;
 }
 
+.report-rounding-note {
+  font-size: 0.78rem;
+  color: var(--muted, #888);
+}
+
 /* =========================
    PRINT
 ========================= */
