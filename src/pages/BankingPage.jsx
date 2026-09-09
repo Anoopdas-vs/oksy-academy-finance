@@ -498,7 +498,9 @@ function StatusTag({ line, data, students }) {
     if (!detail) return;
     const r = e.currentTarget.getBoundingClientRect();
     const flip = r.bottom > window.innerHeight - 200;
-    setTip({ x: r.left, y: flip ? r.top : r.bottom, flip });
+    // Keep the ~320px card inside the viewport when the tag sits near an edge.
+    const x = Math.max(8, Math.min(r.left, window.innerWidth - 332));
+    setTip({ x, y: flip ? r.top : r.bottom, flip });
   };
   const hide = () => setTip(null);
 
