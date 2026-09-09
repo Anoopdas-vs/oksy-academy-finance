@@ -14,7 +14,15 @@ export const ROLE_LABEL = {
 };
 
 // Roles that can be assigned from the app (Owner is set in the database only).
-export const ASSIGNABLE_ROLES = ["admin", "staff", "student", "faculty", "professional"];
+// student/faculty/professional are deliberately left out: they have no
+// permissions and no dedicated screens today (DEFAULT_ROLE_AREAS gives them
+// nothing, and there's no UI built for what they'd see), so offering them
+// here would just let someone create a login that can never do anything.
+// The database role check constraint still allows them — if your project
+// already has an account in one of these roles from before, it keeps
+// working exactly as it does today; this only affects new logins created
+// from this form. Add them back here once real screens exist.
+export const ASSIGNABLE_ROLES = ["admin", "staff"];
 
 // Roles whose area access the Owner configures in Admin → Access.
 export const CONFIGURABLE_ROLES = ["admin", "staff", "student", "faculty", "professional"];

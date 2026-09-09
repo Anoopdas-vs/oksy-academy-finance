@@ -48,10 +48,14 @@ export async function bulkUpsertStudents(students, userId) {
 
 // -------- Fee collections --------
 
-export async function fetchCollections(canViewFinancials) {
-  const table = canViewFinancials ? "collections" : "collections_basic";
+// Always read the masked view, never the base table: collections_basic
+// decides server-side (via can_view_financials()) whether to reveal the
+// real `account` value for the querying user, so the frontend doesn't need
+// to — and, as of migration 06, the base table's own SELECT grant has been
+// revoked for `authenticated`, so querying it directly would fail anyway.
+export async function fetchCollections() {
   const { data, error } = await supabase
-    .from(table)
+    .from("collections_basic")
     .select("*")
     .order("date", { ascending: false });
   if (error) throw error;
@@ -59,10 +63,13 @@ export async function fetchCollections(canViewFinancials) {
 }
 
 export async function insertCollection(collection, userId) {
+  // Only `id` is requested back (for the receipt number): the base table's
+  // SELECT grant for `authenticated` covers just that one column (see
+  // migration 06), so a bare `.select()` here would fail.
   const { data, error } = await supabase
     .from("collections")
     .insert({ ...collection, created_by: userId })
-    .select()
+    .select("id")
     .single();
   if (error) throw error;
   return data;
@@ -237,15 +244,29 @@ export async function mergeExpenseCategory(fromId, fromName, toName) {
 export async function createStaffUser(payload) {
   const { data, error } = await supabase.functions.invoke("create-user", { body: payload });
   if (error) {
-    // Edge functions return the error body as `error.context` in some SDK versions.
-    let msg = error.message || "Could not create the user.";
-    try {
-      const body = await error.context?.json?.();
-      if (body?.error) msg = body.error;
-    } catch {
-      /* keep msg */
+    // FunctionsHttpError: the function ran and returned a non-2xx response —
+    // its JSON body (set by the function's own `json({ error: ... })` helper)
+    // has the real, specific reason (e.g. "Only the Owner can create logins.").
+    if (error.name === "FunctionsHttpError") {
+      let msg = error.message || "Could not create the user.";
+      try {
+        const body = await error.context?.json?.();
+        if (body?.error) msg = body.error;
+      } catch {
+        /* keep msg */
+      }
+      throw new Error(msg);
     }
-    throw new Error(msg);
+    // FunctionsFetchError / FunctionsRelayError: the request never got a
+    // response from the function at all — almost always means create-user
+    // hasn't been deployed to this Supabase project yet (or the project is
+    // paused). Surface that specifically instead of a generic network
+    // error, since this is the one case the admin can actually act on.
+    throw new Error(
+      "Couldn't reach the create-user function. It may not be deployed to " +
+      "this Supabase project yet — see supabase/functions/create-user, or " +
+      "ask whoever manages the project to check."
+    );
   }
   if (data?.error) throw new Error(data.error);
   return data;

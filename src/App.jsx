@@ -4,6 +4,7 @@ import "./App.css";
 
 import { useAuth } from "./context/AuthContext.jsx";
 import Login from "./components/Login.jsx";
+import ForcePasswordChange from "./components/ForcePasswordChange.jsx";
 import ImportPreviewModal from "./components/ImportPreviewModal.jsx";
 import { today } from "./components/ui.jsx";
 import PeriodFilter from "./components/PeriodFilter.jsx";
@@ -126,6 +127,12 @@ export default function App() {
         action={{ label: "Sign out", onClick: signOut }}
       />
     );
+  }
+
+  // Logins provisioned via "Create Login" start with an admin-set temp
+  // password — require a real one before letting them into the app.
+  if (profile.must_change_password) {
+    return <ForcePasswordChange />;
   }
 
   return <AppShell />;
@@ -296,7 +303,7 @@ function AppShell() {
       const [studentRows, collectionRows, batchRows, expenseRows, categoryRows, settings] =
         await Promise.all([
           fetchStudents(),
-          fetchCollections(canViewFinancials),
+          fetchCollections(),
           fetchBatches().catch(() => []),
           fetchExpenses().catch(() => []),
           fetchExpenseCategories().catch(() => []),
@@ -383,9 +390,18 @@ function AppShell() {
     const healthcareLiability = Math.max(0, -healthcareBalance);
     const netInterCompany = -healthcareBalance;
 
-    // Net P&L (per the academy's definition):
-    //   Total Revenue − Total Expense − Total Due (to Healthcare)
-    const netProfit = totalRevenue - totalExpense - healthcareLiability;
+    // Net P&L is a plain income-statement figure: Revenue − Expense.
+    // Expenses paid by Healthcare on the Academy's behalf are already
+    // included in totalExpense (it sums every expense row regardless of
+    // account), so they must NOT also be subtracted again via
+    // healthcareLiability here — "Due to Healthcare" is a balance-sheet
+    // figure (its own tile) about who owes whom, not a second expense.
+    // (This used to be `totalRevenue - totalExpense - healthcareLiability`,
+    // which double-counted Healthcare-paid expenses and — since
+    // healthcareLiability is derived from the all-time `bal()` above while
+    // totalRevenue/totalExpense are period-scoped — also mixed an all-time
+    // balance into a period figure. See the engineering review, finding C1.)
+    const netProfit = totalRevenue - totalExpense;
 
     return {
       totalStudents,

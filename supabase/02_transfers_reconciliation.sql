@@ -1,7 +1,14 @@
 -- ============================================================
--- Migration: Transfers + Bank Reconciliation
+-- Migration 02: Transfers + Bank Reconciliation
 -- ============================================================
--- Run ONCE in the Supabase SQL Editor (after migration-healthcare-account.sql).
+-- Run ONCE in the Supabase SQL Editor, after 01_healthcare_account.sql.
+--
+-- Must run BEFORE 03_admin_reports.sql — that migration adds a delete
+-- policy on public.transfers, which is the table created here. (An earlier
+-- version of these migrations was named/ordered alphabetically, which put
+-- admin-reports before transfers-reconciliation and broke on a fresh apply
+-- with "relation public.transfers does not exist" — that's why these files
+-- are numbered instead of left to sort alphabetically.)
 --
 -- Adds:
 --   * transfers            — money moved between accounts (not income/expense)

@@ -29,3 +29,7 @@ dist-ssr
 .claude/
 Claude outputs/
 *.bundle
+
+# Database dumps written by scripts/backup-db.sh
+/backups/
+*.dump

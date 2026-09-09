@@ -1,0 +1,49 @@
+name: Deploy Supabase Edge Functions
+
+# Auto-deploys supabase/functions/create-user whenever it changes on main, so
+# "Create Login" in the Admin tab never silently depends on someone
+# remembering to run `supabase functions deploy` by hand after a code change.
+# See the engineering review — this replaces a static "needs the
+# create-user Edge Function deployed" note in the UI that this workflow is
+# meant to make true by default instead of true only after a manual step.
+#
+# One-time setup required before this will run successfully — add these repo
+# secrets under Settings → Secrets and variables → Actions:
+#   SUPABASE_ACCESS_TOKEN   a personal access token from
+#                           https://supabase.com/dashboard/account/tokens
+#                           (used by the CLI to authenticate — this is an
+#                           account-level token, not the project's anon or
+#                           service-role key).
+#   SUPABASE_PROJECT_REF    the project ref from Project Settings → General
+#                           (the short id in your project's URL).
+#
+# This workflow deploys the FUNCTION CODE only. The service-role secret the
+# function needs at runtime is a separate, one-time step this workflow does
+# NOT do for you (deliberately — re-running `supabase secrets set` on every
+# deploy has no benefit and is one more place a typo could leak a
+# high-privilege key into CI logs on failure):
+#   supabase secrets set SERVICE_ROLE_KEY=<your service_role key> --project-ref <ref>
+# Run that once from your own machine (or re-run it if you ever rotate the
+# key) — see supabase/functions/create-user/index.ts's own header comment.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/**"
+  workflow_dispatch: {} # lets you trigger a redeploy manually from the Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy create-user
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy create-user --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"

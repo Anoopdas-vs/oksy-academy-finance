@@ -1,7 +1,9 @@
 -- ============================================================
--- Migration: broaden staff access
+-- Migration 04: broaden staff access
 -- ============================================================
--- Run ONCE in the Supabase SQL Editor, after the earlier migrations.
+-- Run ONCE in the Supabase SQL Editor, after 03_admin_reports.sql — this
+-- migration edits policies on public.batches and public.expense_categories,
+-- both of which 03 is what creates.
 --
 -- Approved staff can now record & edit expenses, and create batches and
 -- expense categories. Deleting still needs admin. Transfers / bank

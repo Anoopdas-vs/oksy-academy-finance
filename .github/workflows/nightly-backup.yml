@@ -1,0 +1,61 @@
+name: Nightly database backup
+
+# Independent, off-platform copy of the Supabase database — see finding H3 in
+# the engineering review and scripts/backup-db.sh (which this calls) and the
+# "Backups" section in PROJECT_OVERVIEW.md for the full explanation, why this
+# exists separately from Supabase's own backups, and how to restore from one
+# of these dumps.
+#
+# One-time setup required before this will run successfully — add these repo
+# secrets under Settings → Secrets and variables → Actions:
+#   SUPABASE_DB_URL      required. The Postgres connection string from
+#                         Supabase dashboard → Project Settings → Database →
+#                         Connection string → URI. Use the "Session pooler"
+#                         variant — GitHub-hosted runners are IPv4-only and
+#                         Supabase's direct connection is IPv6-only unless
+#                         you've bought the IPv4 add-on.
+#   BACKUP_S3_BUCKET      optional. If set (together with standard AWS
+#                         credentials as secrets, or an OIDC role — not
+#                         covered here), the dump is also uploaded to this
+#                         S3 bucket for longer-lived, off-GitHub retention.
+#   AWS_ACCESS_KEY_ID,
+#   AWS_SECRET_ACCESS_KEY,
+#   AWS_DEFAULT_REGION    optional, only needed if BACKUP_S3_BUCKET is set.
+#
+# Without BACKUP_S3_BUCKET configured, the dump still gets an off-platform
+# home as a workflow artifact (see retention-days below) — that alone already
+# satisfies "somewhere other than Supabase", it's just capped at 90 days by
+# GitHub and isn't meant as permanent storage.
+on:
+  schedule:
+    # 19:00 UTC = 00:30 IST. Cron is always evaluated in UTC regardless of
+    # where the repo or its collaborators are.
+    - cron: "0 19 * * *"
+  workflow_dispatch: {} # lets you trigger a one-off backup manually from the Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install postgresql-client (for pg_dump)
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run backup
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+        run: ./scripts/backup-db.sh
+
+      - name: Upload dump as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: backups/*.dump
+          retention-days: 30
+          if-no-files-found: error

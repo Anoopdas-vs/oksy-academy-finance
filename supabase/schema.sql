@@ -14,6 +14,9 @@ create table public.profiles (
   role text not null default 'staff' check (role in ('super_admin', 'admin', 'staff', 'student', 'faculty', 'professional')),
   can_view_financials boolean not null default false,
   is_approved boolean not null default false,
+  -- True for logins provisioned by the create-user Edge Function (an
+  -- admin-set temp password) until the person changes it. See migration 10.
+  must_change_password boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -77,11 +80,27 @@ create trigger on_auth_user_created
 create policy "profiles_self_select" on public.profiles
   for select using (id = auth.uid());
 
-create policy "profiles_admin_select_all" on public.profiles
-  for select using (public.is_admin());
+-- Only the Owner (super_admin) reads the full roster — matches the app's
+-- own access model (manageUsers: isSuperAdmin in src/lib/access.js). Using
+-- is_admin() here used to let plain admins read it too; see migration 07.
+create policy "profiles_super_admin_select_all" on public.profiles
+  for select using (public.is_super_admin());
 
 create policy "profiles_super_admin_update_all" on public.profiles
   for update using (public.is_super_admin()) with check (public.is_super_admin());
+
+-- Lets any signed-in user clear their OWN must_change_password flag after
+-- changing their password — and nothing else about their row, since a
+-- SECURITY DEFINER function can only do exactly what its body says. See
+-- migration 10.
+create or replace function public.clear_my_must_change_password()
+returns void
+language sql security definer set search_path = public
+as $$
+  update public.profiles set must_change_password = false where id = auth.uid();
+$$;
+
+grant execute on function public.clear_my_must_change_password() to authenticated;
 
 -- ------------------------------------------------------------
 -- 2. STUDENTS  (student master — visible to every approved login)
@@ -135,13 +154,19 @@ create table public.collections (
   amount numeric not null check (amount > 0),
   reference text,
   created_at timestamptz not null default now(),
-  created_by uuid references public.profiles (id)
+  created_by uuid references public.profiles (id),
+  updated_at timestamptz,
+  updated_by uuid references public.profiles (id)
 );
 
 alter table public.collections enable row level security;
 create index collections_student_id_idx on public.collections (student_id);
 create index collections_date_idx on public.collections (date);
 
+-- Kept as a floor even though direct table SELECT is revoked from
+-- `authenticated` below (reads go through collections_basic instead) — if
+-- that grant is ever restored, approved-user-only is still the right
+-- fallback rather than accidentally open.
 create policy "collections_approved_select" on public.collections
   for select using (public.is_approved_user());
 
@@ -154,8 +179,26 @@ create policy "collections_admin_update" on public.collections
 create policy "collections_admin_delete" on public.collections
   for delete using (public.is_admin());
 
+-- NOT security_invoker: a security_invoker view checks the INVOKING role's
+-- own column privileges against the underlying table for every column the
+-- view body references — including inside a `case when ... else null end`
+-- that never actually returns it. So a security_invoker version of this
+-- view, combined with revoking `account` from `authenticated` below, would
+-- throw "permission denied for table collections" for every single caller,
+-- not just the ones who are supposed to be masked (verified empirically —
+-- see the engineering review, finding C2). A plain view runs its underlying
+-- query as the view's OWNER, who has full table access, so the CASE
+-- expression can evaluate `account` and still only ever return it to
+-- whoever the expression says should see it; `authenticated` never needs
+-- (and per the revoke below, never gets) any privilege on the base table's
+-- `account` column at all. security_barrier keeps the query planner from
+-- reordering a future filter ahead of this view's own row-visibility check.
+-- The `where` clause re-implements collections_approved_select's rule
+-- explicitly (rather than depending on RLS-via-view propagation, which is
+-- exactly the part security_invoker would otherwise be for) so this view's
+-- visibility is self-contained and doesn't depend on who owns it.
 create view public.collections_basic
-with (security_invoker = true)
+with (security_barrier = true)
 as
 select
   id,
@@ -169,8 +212,16 @@ select
     when public.can_view_financials() or created_by = auth.uid() then account
     else null
   end as account
-from public.collections;
+from public.collections
+where public.is_approved_user();
 
+-- Reads go through the view ONLY: it's the view's `case when` above that
+-- actually enforces the masking, and that only works if nobody can also
+-- query the base table directly and get the unmasked `account`. `id` stays
+-- column-granted on the base table because insertCollection() needs it
+-- back via RETURNING and edit/delete filter by it (see migration 06).
+revoke select on public.collections from authenticated;
+grant select (id) on public.collections to authenticated;
 grant select on public.collections_basic to authenticated;
 
 -- ------------------------------------------------------------
@@ -207,33 +258,11 @@ create policy "expenses_approved_update" on public.expenses
 create policy "expenses_admin_delete" on public.expenses
   for delete using (public.is_admin());
 
--- ------------------------------------------------------------
--- 5. INCOME  (other Academy income — confidential, admin only)
--- ------------------------------------------------------------
-create table public.income (
-  id bigint generated always as identity primary key,
-  date date not null,
-  category text not null,
-  -- 'Healthcare' = income collected on Academy's behalf by Healthcare (inter-company).
-  account text not null check (account in ('HDFC', 'ICICI', 'Cash', 'Healthcare')),
-  amount numeric not null check (amount > 0),
-  reference text,
-  description text,
-  created_at timestamptz not null default now(),
-  created_by uuid references public.profiles (id)
-);
-
-alter table public.income enable row level security;
-create index income_date_idx on public.income (date);
-
-create policy "income_financial_viewer_select" on public.income
-  for select using (public.can_view_financials());
-
-create policy "income_admin_insert" on public.income
-  for insert with check (public.is_admin());
-
-create policy "income_admin_update" on public.income
-  for update using (public.is_admin()) with check (public.is_admin());
+-- Note: there is deliberately no "5. INCOME" table here any more. An
+-- earlier version of this schema had one for an "other Academy income"
+-- feature that was later removed from the frontend entirely — nothing
+-- reads or writes it. If your project still has it from before, run
+-- 08_drop_income_table.sql (after exporting any existing rows).
 
 -- ------------------------------------------------------------
 -- 6. TRANSFERS  (money moved between accounts — not income or expense)
@@ -397,7 +426,55 @@ create policy "app_settings_super_admin_insert" on public.app_settings
   for insert with check (public.is_super_admin());
 
 -- ------------------------------------------------------------
--- 11. MAKE YOURSELF THE SUPER ADMIN
+-- 11. AUDIT LOG  (who changed/deleted a financial record, and what it was)
+-- ------------------------------------------------------------
+create table public.audit_log (
+  id bigint generated always as identity primary key,
+  table_name text not null,
+  row_id bigint not null,
+  action text not null check (action in ('update', 'delete')),
+  old_row jsonb,
+  new_row jsonb,
+  changed_by uuid references public.profiles (id),
+  changed_at timestamptz not null default now()
+);
+
+alter table public.audit_log enable row level security;
+create index audit_log_table_row_idx on public.audit_log (table_name, row_id);
+
+create policy "audit_log_financial_viewer_select" on public.audit_log
+  for select using (public.can_view_financials());
+
+create or replace function public.log_financial_change()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if (tg_op = 'UPDATE') then
+    insert into public.audit_log (table_name, row_id, action, old_row, new_row, changed_by)
+    values (tg_table_name, new.id, 'update', to_jsonb(old), to_jsonb(new), auth.uid());
+    return new;
+  elsif (tg_op = 'DELETE') then
+    insert into public.audit_log (table_name, row_id, action, old_row, new_row, changed_by)
+    values (tg_table_name, old.id, 'delete', to_jsonb(old), null, auth.uid());
+    return old;
+  end if;
+  return null;
+end;
+$$;
+
+create trigger collections_audit
+  after update or delete on public.collections
+  for each row execute function public.log_financial_change();
+create trigger expenses_audit
+  after update or delete on public.expenses
+  for each row execute function public.log_financial_change();
+create trigger transfers_audit
+  after update or delete on public.transfers
+  for each row execute function public.log_financial_change();
+
+-- ------------------------------------------------------------
+-- 12. MAKE YOURSELF THE SUPER ADMIN
 -- ------------------------------------------------------------
 -- 1. Sign up once from the app's login screen with your own email/password.
 -- 2. Then run this (replace the email):

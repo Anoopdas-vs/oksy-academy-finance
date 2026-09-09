@@ -178,7 +178,7 @@ export default function Dashboard({
                 icon="📈"
                 accent={totals.netProfit >= 0 ? "green" : "red"}
                 valueTone={totals.netProfit >= 0 ? "pos" : "neg"}
-                caption="Revenue − Expense − Due to Healthcare"
+                caption="Revenue − Expense"
               />
               <StatTile label="Outstanding Student Fees" value={formatMoney(totals.studentReceivable)} icon="📄" accent="blue" caption="Amount still to be collected" />
               <StatTile
