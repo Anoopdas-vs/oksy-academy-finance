@@ -1,8 +1,13 @@
 -- ============================================================
--- Migration: "Healthcare" becomes a payment account
+-- Migration 01: "Healthcare" becomes a payment account
 -- ============================================================
 -- Run this ONCE in the Supabase SQL Editor on your existing project
 -- (Dashboard -> SQL Editor -> New query -> paste -> Run).
+--
+-- Order: run the supabase/NN_*.sql files in NUMERIC order (01, 02, 03, ...).
+-- This one has no dependency on the others and goes first. On a brand-new
+-- project, skip all of these and run schema.sql instead — it already
+-- contains everything these migrations add.
 --
 -- What it does:
 --   * Preserves any historical rows that used the old paid_to / paid_by /
@@ -56,8 +61,11 @@ alter table public.income
 alter table public.income drop column if exists received_via;
 
 -- --- rebuild the masked collections view (without paid_to) ----------
+-- NOT security_invoker — see migration 06's comment for why that option
+-- doesn't work for a column-masking view once the base table's columns are
+-- locked down (which migration 06, run right after this one, does).
 create view public.collections_basic
-with (security_invoker = true)
+with (security_barrier = true)
 as
 select
   id,
@@ -71,7 +79,8 @@ select
     when public.can_view_financials() or created_by = auth.uid() then account
     else null
   end as account
-from public.collections;
+from public.collections
+where public.is_approved_user();
 
 grant select on public.collections_basic to authenticated;
 
