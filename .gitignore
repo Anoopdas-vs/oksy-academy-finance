@@ -29,3 +29,8 @@ dist-ssr
 .claude/
 Claude outputs/
 *.bundle
+
+# Build cache, coverage, and temporary files
+.vite/
+coverage/
+*.tmp

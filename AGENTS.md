@@ -17,6 +17,7 @@ Welcome to the **Oksy Academy Portal** codebase.
 - **Financials**: Student enrollment, fee collection, expenses, banking reconciliation, and reports.
 
 ## 3. Development & Verification Commands
+- `npm test`: Runs Node.js native test runner (`node:test`) on `src/lib/*.test.js` (financial calculations and bank reconciliation).
 - `npm run lint`: Runs `oxlint`. Must pass with 0 errors and 0 warnings.
 - `npm run build`: Production build via Vite. Bundle chunking configured in `vite.config.js`.
 

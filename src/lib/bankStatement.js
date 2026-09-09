@@ -1,5 +1,4 @@
-import * as XLSX from "xlsx";
-
+// Bank statement parser. Dynamically loads xlsx on demand when a statement is uploaded.
 // Parse an uploaded bank statement workbook into a normalised shape:
 //   { periodStart, periodEnd, openingBalance, closingBalance, lines: [...] }
 // where each line is
@@ -81,7 +80,8 @@ const findCol = (header, ...res) =>
     return res.some((re) => re.test(t));
   });
 
-export function parseBankStatement(fileBuffer) {
+export async function parseBankStatement(fileBuffer) {
+  const XLSX = await import("xlsx");
   const wb = XLSX.read(fileBuffer, { type: "array", cellDates: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });

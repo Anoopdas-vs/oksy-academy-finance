@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import * as XLSX from "xlsx";
 import "./App.css";
 
 import { useAuth } from "./context/useAuth.js";
@@ -167,6 +166,14 @@ function FullScreenMessage({ title, text, action }) {
 // cellDates: true), a raw day-count "serial number" (e.g. 45806) when the
 // cell wasn't recognized as a date, or plain text the user typed in. This
 // normalizes any of those into a clean "YYYY-MM-DD" string for the database.
+let xlsxModule = null;
+async function getXlsx() {
+  if (!xlsxModule) {
+    xlsxModule = await import("xlsx");
+  }
+  return xlsxModule;
+}
+
 function parseExcelDate(value) {
   if (value === undefined || value === null || value === "") return null;
   if (value instanceof Date && !isNaN(value)) {
@@ -176,11 +183,20 @@ function parseExcelDate(value) {
     return `${y}-${m}-${d}`;
   }
   if (typeof value === "number") {
-    const parsed = XLSX.SSF.parse_date_code(value);
-    if (parsed) {
-      const y = parsed.y;
-      const m = String(parsed.m).padStart(2, "0");
-      const d = String(parsed.d).padStart(2, "0");
+    if (xlsxModule?.SSF) {
+      const parsed = xlsxModule.SSF.parse_date_code(value);
+      if (parsed) {
+        const y = parsed.y;
+        const m = String(parsed.m).padStart(2, "0");
+        const d = String(parsed.d).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+    }
+    const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+    if (!isNaN(date.getTime())) {
+      const y = date.getUTCFullYear();
+      const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const d = String(date.getUTCDate()).padStart(2, "0");
       return `${y}-${m}-${d}`;
     }
   }
@@ -188,13 +204,15 @@ function parseExcelDate(value) {
 }
 
 function readWorkbookRows(file, onRows) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const workbook = XLSX.read(e.target.result, { type: "array", cellDates: true });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    onRows(XLSX.utils.sheet_to_json(sheet));
-  };
-  reader.readAsArrayBuffer(file);
+  getXlsx().then((XLSX) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const workbook = XLSX.read(e.target.result, { type: "array", cellDates: true });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      onRows(XLSX.utils.sheet_to_json(sheet));
+    };
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 function AppShell() {
@@ -309,13 +327,16 @@ function AppShell() {
   const loadData = async () => {
     setDataLoading(true);
     try {
+      const needCollections = access.financials || access.canOpen("Fee Collection");
+      const needExpenses = access.financials;
+
       const [studentRows, collectionRows, batchRows, expenseRows, categoryRows, settings] =
         await Promise.all([
           fetchStudents(),
-          fetchCollections(canViewFinancials),
+          needCollections ? fetchCollections(canViewFinancials).catch(() => []) : Promise.resolve([]),
           fetchBatches().catch(() => []),
-          fetchExpenses().catch(() => []),
-          fetchExpenseCategories().catch(() => []),
+          needExpenses ? fetchExpenses().catch(() => []) : Promise.resolve([]),
+          needExpenses ? fetchExpenseCategories().catch(() => []) : Promise.resolve([]),
           fetchAppSettings().catch(() => ({})),
         ]);
       setStudents(studentRows);
@@ -350,7 +371,7 @@ function AppShell() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canViewFinancials]);
+  }, [canViewFinancials, access.role]);
 
   // Resolved { start, end } for the active period, or null for all-time.
   const range = useMemo(() => resolvePeriod(period), [period]);
@@ -708,7 +729,7 @@ function AppShell() {
     setDataError("");
     try {
       const buffer = await file.arrayBuffer();
-      const parsed = parseBankStatement(buffer);
+      const parsed = await parseBankStatement(buffer);
       const matches = autoMatch(parsed.lines, account, { collections, expenses, transfers });
 
       const lineRows = parsed.lines.map((ln, i) => ({
