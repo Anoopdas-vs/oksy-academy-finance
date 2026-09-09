@@ -244,15 +244,29 @@ export async function mergeExpenseCategory(fromId, fromName, toName) {
 export async function createStaffUser(payload) {
   const { data, error } = await supabase.functions.invoke("create-user", { body: payload });
   if (error) {
-    // Edge functions return the error body as `error.context` in some SDK versions.
-    let msg = error.message || "Could not create the user.";
-    try {
-      const body = await error.context?.json?.();
-      if (body?.error) msg = body.error;
-    } catch {
-      /* keep msg */
+    // FunctionsHttpError: the function ran and returned a non-2xx response —
+    // its JSON body (set by the function's own `json({ error: ... })` helper)
+    // has the real, specific reason (e.g. "Only the Owner can create logins.").
+    if (error.name === "FunctionsHttpError") {
+      let msg = error.message || "Could not create the user.";
+      try {
+        const body = await error.context?.json?.();
+        if (body?.error) msg = body.error;
+      } catch {
+        /* keep msg */
+      }
+      throw new Error(msg);
     }
-    throw new Error(msg);
+    // FunctionsFetchError / FunctionsRelayError: the request never got a
+    // response from the function at all — almost always means create-user
+    // hasn't been deployed to this Supabase project yet (or the project is
+    // paused). Surface that specifically instead of a generic network
+    // error, since this is the one case the admin can actually act on.
+    throw new Error(
+      "Couldn't reach the create-user function. It may not be deployed to " +
+      "this Supabase project yet — see supabase/functions/create-user, or " +
+      "ask whoever manages the project to check."
+    );
   }
   if (data?.error) throw new Error(data.error);
   return data;

@@ -49,8 +49,10 @@ is no migration runner. Before applying any of them, run the check in
 PROJECT_OVERVIEW.md §8 to see which ones, if any, your project still needs.
 
 The `create-user` Edge Function (`supabase/functions/create-user/`) lets a
-super-admin create logins; it needs the `SERVICE_ROLE_KEY` secret set in
-Supabase.
+super-admin create logins. `.github/workflows/deploy-edge-functions.yml`
+deploys it automatically on push (see that file for the one-time repo
+secrets it needs); it still needs the `SERVICE_ROLE_KEY` secret set in
+Supabase itself once, which the workflow deliberately doesn't do for you.
 
 ⚠ The production database is live. Propose schema changes as SQL; don't run
 them automatically.

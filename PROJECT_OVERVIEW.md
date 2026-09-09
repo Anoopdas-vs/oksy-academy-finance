@@ -79,6 +79,7 @@ scripts/
   backup-db.sh             nightly off-platform pg_dump (see §9 Backups)
 .github/workflows/
   nightly-backup.yml       schedules backup-db.sh via GitHub Actions
+  deploy-edge-functions.yml auto-deploys supabase/functions/create-user on push
 ```
 
 ---
@@ -153,14 +154,20 @@ Elsewhere (not in the repo):
   auto-detected, no `vercel.json`). Currently manual `vercel --prod`.
   Recommended: connect the GitHub repo in the Vercel dashboard for
   auto-deploy on push.
-- **Edge function** → deployed manually via the Supabase dashboard or
-  `supabase functions deploy create-user`.
+- **Edge function** → auto-deployed by `.github/workflows/deploy-edge-functions.yml`
+  on every push to `main` that touches `supabase/functions/**` (needs the
+  `SUPABASE_ACCESS_TOKEN` / `SUPABASE_PROJECT_REF` repo secrets — see that
+  file's header comment; the one thing it still doesn't do for you is the
+  one-time `supabase secrets set SERVICE_ROLE_KEY=...`). Can also be run by
+  hand: `supabase functions deploy create-user --project-ref <ref>`.
 - **DB** → fresh project: paste `supabase/schema.sql` into the Supabase SQL
   editor. Existing pre-schema.sql project: run each `supabase/NN_*.sql` file
-  in numeric order (01 → 05) — see the verification query below for whether
+  in numeric order (01 → 10) — see the verification query below for whether
   your project still needs any of them.
 
-No Dockerfile, no CI, no `supabase/config.toml` / CLI migrations folder.
+No Dockerfile, no `supabase/config.toml` / CLI migrations folder. CI is two
+GitHub Actions workflows: `nightly-backup.yml` (§9) and
+`deploy-edge-functions.yml` (above).
 
 ---
 
@@ -261,6 +268,18 @@ branch:
   this PR:** `scripts/backup-db.sh` + `.github/workflows/nightly-backup.yml`
   — see §9 Backups above. Needs the `SUPABASE_DB_URL` secret added to the
   repo before it will actually run successfully.)
+- The `create-user` Edge Function had to be deployed by hand, and the UI
+  carried a permanent static note saying so under the "Create Login" button
+  — easy to forget, and confusing to read as a standing error even when the
+  function *was* deployed and working. **(fixed in this PR:**
+  `.github/workflows/deploy-edge-functions.yml` deploys it automatically on
+  every push to `supabase/functions/**`; the static note is gone, and
+  `createStaffUser()` (`src/lib/data.js`) now distinguishes "the function
+  ran and rejected the request" — real message shown as-is — from "the
+  request never reached a deployed function at all", surfacing the
+  deploy-related guidance only in the case it's actually relevant. Needs the
+  `SUPABASE_ACCESS_TOKEN` / `SUPABASE_PROJECT_REF` repo secrets before it
+  will actually run successfully — see that workflow file's header.)
 
 **Code**
 - `src/App.jsx` (~1400 loc) holds everything — state, handlers, `totals`
