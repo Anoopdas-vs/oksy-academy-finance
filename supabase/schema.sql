@@ -397,7 +397,131 @@ create policy "app_settings_super_admin_insert" on public.app_settings
   for insert with check (public.is_super_admin());
 
 -- ------------------------------------------------------------
--- 11. MAKE YOURSELF THE SUPER ADMIN
+-- 11. ACADEMY SUITE  (Timetable, Assignments, Exams, Reviews)
+-- ------------------------------------------------------------
+-- Mirrors supabase/migration-academy-suite.sql so a fresh project gets the
+-- full portal in one pass. All CREATE ... IF NOT EXISTS — safe to re-run.
+
+create table if not exists public.timetables (
+  id text primary key,
+  day text not null,                      -- Monday .. Saturday
+  time text not null,                     -- e.g. 10:00 AM - 11:30 AM
+  subject text not null,
+  batch text not null,
+  faculty text not null,
+  room text default 'Virtual Room 101',
+  link text,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.assignments (
+  id text primary key,
+  title text not null,
+  batch text not null,
+  due_date date not null,
+  max_marks integer not null default 100,
+  description text,
+  attachment_url text,
+  created_by uuid references auth.users (id),
+  created_at timestamptz default now()
+);
+
+create table if not exists public.assignment_submissions (
+  id text primary key,
+  assignment_id text references public.assignments (id) on delete cascade,
+  student_id uuid references auth.users (id),
+  link text,
+  notes text,
+  marks integer,
+  feedback text,
+  status text default 'Submitted',        -- Submitted, Graded
+  submitted_at timestamptz default now()
+);
+
+create table if not exists public.exams (
+  id text primary key,
+  title text not null,
+  batch text not null,
+  duration_minutes integer not null default 30,
+  passing_score integer not null default 50,
+  status text default 'Available',         -- Available, Upcoming, Completed
+  created_by uuid references auth.users (id),
+  created_at timestamptz default now()
+);
+
+create table if not exists public.exam_questions (
+  id text primary key,
+  exam_id text references public.exams (id) on delete cascade,
+  question text not null,
+  options jsonb not null,                  -- ["Option A", "Option B", ...]
+  correct_index integer not null,
+  marks integer default 1
+);
+
+create table if not exists public.exam_results (
+  id text primary key,
+  exam_id text references public.exams (id) on delete cascade,
+  student_id uuid references auth.users (id),
+  score integer not null,
+  total integer not null,
+  percentage integer not null,
+  passed boolean not null,
+  submitted_at timestamptz default now()
+);
+
+create table if not exists public.faculty_reviews (
+  id text primary key,
+  faculty text not null,
+  subject text not null,
+  rating integer not null check (rating between 1 and 5),
+  clarity integer not null check (clarity between 1 and 5),
+  punctuality integer not null check (punctuality between 1 and 5),
+  comment text not null,
+  student_id uuid references auth.users (id),
+  created_at timestamptz default now()
+);
+
+alter table public.timetables enable row level security;
+alter table public.assignments enable row level security;
+alter table public.assignment_submissions enable row level security;
+alter table public.exams enable row level security;
+alter table public.exam_questions enable row level security;
+alter table public.exam_results enable row level security;
+alter table public.faculty_reviews enable row level security;
+
+create policy "Approved users can view timetable" on public.timetables
+  for select to authenticated using (public.is_approved_user());
+create policy "Admins can manage timetable" on public.timetables
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+create policy "Approved users can view assignments" on public.assignments
+  for select to authenticated using (public.is_approved_user());
+create policy "Admins can manage assignments" on public.assignments
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+create policy "Users can manage own submissions" on public.assignment_submissions
+  for all to authenticated using (student_id = auth.uid() or public.is_admin())
+  with check (student_id = auth.uid() or public.is_admin());
+
+create policy "Approved users can view exams" on public.exams
+  for select to authenticated using (public.is_approved_user());
+create policy "Admins can manage exams" on public.exams
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+create policy "Approved users can view exam questions" on public.exam_questions
+  for select to authenticated using (public.is_approved_user());
+
+create policy "Users can record own exam results" on public.exam_results
+  for all to authenticated using (student_id = auth.uid() or public.is_admin())
+  with check (student_id = auth.uid() or public.is_admin());
+
+create policy "Approved users can view reviews" on public.faculty_reviews
+  for select to authenticated using (public.is_approved_user());
+create policy "Users can post reviews" on public.faculty_reviews
+  for insert to authenticated with check (auth.uid() is not null);
+
+-- ------------------------------------------------------------
+-- 12. MAKE YOURSELF THE SUPER ADMIN
 -- ------------------------------------------------------------
 -- 1. Sign up once from the app's login screen with your own email/password.
 -- 2. Then run this (replace the email):
