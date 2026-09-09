@@ -1267,6 +1267,9 @@ function AppShell() {
 
         {nav.length > 0 && access.canOpen(HOME) && activeTab === HOME && (
           <Dashboard
+            profile={profile}
+            role={access.role}
+            batches={batches}
             totals={totals}
             allStudents={students}
             allCollections={collections}
@@ -1283,6 +1286,7 @@ function AppShell() {
         {activeTab === "Timetable" && (
           <TimetablePage
             isAdmin={isAdmin}
+            role={access.role}
             batches={batches}
             onNavigateToClass={(subject, link) => {
               setLiveClassInfo({ subject, link });
@@ -1301,6 +1305,7 @@ function AppShell() {
         {activeTab === "Assignments" && (
           <AssignmentsPage
             isAdmin={isAdmin}
+            role={access.role}
             batches={batches}
           />
         )}
@@ -1308,11 +1313,14 @@ function AppShell() {
         {activeTab === "Exams" && (
           <ExamsPage
             isAdmin={isAdmin}
+            role={access.role}
           />
         )}
 
         {activeTab === "Reviews" && (
-          <ReviewsPage />
+          <ReviewsPage
+            profile={profile}
+          />
         )}
 
         {activeTab === "Enrollment" && (

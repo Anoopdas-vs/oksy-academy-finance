@@ -62,12 +62,21 @@ const SAMPLE_EXAMS = [
   },
 ];
 
-export default function ExamsPage({ isAdmin }) {
-  const [exams, setExams] = useState(SAMPLE_EXAMS);
+export default function ExamsPage({ isAdmin, role }) {
+  const canManage = isAdmin || role === "faculty";
+  const [exams, setExams] = useState(() => {
+    try {
+      const saved = localStorage.getItem("oksy_exams");
+      return saved ? JSON.parse(saved) : SAMPLE_EXAMS;
+    } catch {
+      return SAMPLE_EXAMS;
+    }
+  });
   const [activeExam, setActiveExam] = useState(null); // Exam object currently in progress
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [answers, setAnswers] = useState({}); // { [qIndex]: selectedOptionIndex }
   const [timeLeft, setTimeLeft] = useState(0);
+  const [result, setResult] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newExamForm, setNewExamForm] = useState({
     title: "",
@@ -75,6 +84,14 @@ export default function ExamsPage({ isAdmin }) {
     durationMins: 20,
     passingScore: 60,
   });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("oksy_exams", JSON.stringify(exams));
+    } catch {
+      // ignore
+    }
+  }, [exams]);
 
   const handleCreateExam = (e) => {
     e.preventDefault();
@@ -84,8 +101,21 @@ export default function ExamsPage({ isAdmin }) {
       ...newExamForm,
       durationMins: Number(newExamForm.durationMins),
       passingScore: Number(newExamForm.passingScore),
-      status: "Upcoming",
-      questions: [],
+      status: "Available",
+      questions: [
+        {
+          id: "q_auto_1",
+          question: `Standard comprehensive assessment on ${newExamForm.title}: Question 1`,
+          options: ["Core Principle A", "Core Principle B", "Core Principle C", "Core Principle D"],
+          correctIndex: 0,
+        },
+        {
+          id: "q_auto_2",
+          question: `Practical implementation and architectural consideration for ${newExamForm.batch}`,
+          options: ["Standard Architecture", "Optimized Pattern", "Legacy Pattern", "None of the above"],
+          correctIndex: 1,
+        },
+      ],
     };
     setExams((prev) => [...prev, newExam]);
     setShowCreateModal(false);
@@ -159,7 +189,7 @@ export default function ExamsPage({ isAdmin }) {
           <h2>Examinations & Quizzes</h2>
           <p>Online assessments with timed evaluation, anti-cheat question navigation, and instant grading.</p>
         </div>
-        {!activeExam && isAdmin && (
+        {!activeExam && canManage && (
           <button className="button primary" onClick={() => setShowCreateModal(true)}>
             + Create Exam
           </button>

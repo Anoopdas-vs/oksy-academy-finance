@@ -67,15 +67,31 @@ const DEFAULT_SCHEDULE = [
   },
 ];
 
-export default function TimetablePage({ isAdmin, batches = [], onNavigateToClass }) {
+export default function TimetablePage({ isAdmin, role, batches = [], onNavigateToClass }) {
+  const canManage = isAdmin || role === "faculty";
   const [selectedDay, setSelectedDay] = useState(() => {
     const todayIndex = new Date().getDay(); // 0 is Sunday
     return todayIndex === 0 ? "Monday" : DAYS[todayIndex - 1] || "Monday";
   });
 
-  const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
+  const [schedule, setSchedule] = useState(() => {
+    try {
+      const saved = localStorage.getItem("oksy_timetables");
+      return saved ? JSON.parse(saved) : DEFAULT_SCHEDULE;
+    } catch {
+      return DEFAULT_SCHEDULE;
+    }
+  });
   const [selectedBatch, setSelectedBatch] = useState("All");
   const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("oksy_timetables", JSON.stringify(schedule));
+    } catch {
+      // ignore
+    }
+  }, [schedule]);
 
   const [form, setForm] = useState({
     day: "Monday",
@@ -127,6 +143,16 @@ export default function TimetablePage({ isAdmin, batches = [], onNavigateToClass
     }
   };
 
+  const handleDeleteSlot = async (id) => {
+    if (!window.confirm("Delete this scheduled slot?")) return;
+    setSchedule((prev) => prev.filter((s) => s.id !== id));
+    try {
+      await supabase.from("timetables").delete().eq("id", id);
+    } catch {
+      // Ignored if offline
+    }
+  };
+
   return (
     <section className="page">
       <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
@@ -148,7 +174,7 @@ export default function TimetablePage({ isAdmin, batches = [], onNavigateToClass
               </option>
             ))}
           </select>
-          {isAdmin && (
+          {canManage && (
             <button className="button primary" onClick={() => setShowModal(true)}>
               + Add Class Slot
             </button>
@@ -228,6 +254,16 @@ export default function TimetablePage({ isAdmin, batches = [], onNavigateToClass
                   >
                     🎥 Join Live Room
                   </button>
+                  {canManage && (
+                    <button
+                      className="button secondary"
+                      style={{ color: "var(--danger, #ef4444)", padding: "0.5rem 0.8rem" }}
+                      onClick={() => handleDeleteSlot(slot.id)}
+                      title="Delete Slot"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

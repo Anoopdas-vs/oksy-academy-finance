@@ -45,10 +45,25 @@ const FACULTY_LIST = [
   { name: "Anoopdas V S", subject: "AI & Automated Development Workflows" },
 ];
 
-export default function ReviewsPage() {
-  const [reviews, setReviews] = useState(DEFAULT_REVIEWS);
+export default function ReviewsPage({ profile }) {
+  const [reviews, setReviews] = useState(() => {
+    try {
+      const saved = localStorage.getItem("oksy_reviews");
+      return saved ? JSON.parse(saved) : DEFAULT_REVIEWS;
+    } catch {
+      return DEFAULT_REVIEWS;
+    }
+  });
   const [showModal, setShowModal] = useState(false);
   const [selectedFaculty, setSelectedFaculty] = useState("All");
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("oksy_reviews", JSON.stringify(reviews));
+    } catch {
+      // ignore
+    }
+  }, [reviews]);
 
   const [form, setForm] = useState({
     faculty: FACULTY_LIST[0].name,
@@ -74,7 +89,7 @@ export default function ReviewsPage() {
       rating: Number(form.rating),
       clarity: Number(form.clarity),
       punctuality: Number(form.punctuality),
-      studentName: "Student (Verified)",
+      studentName: profile?.full_name || "Student (Verified)",
       date: today(),
       comment: form.comment,
     };

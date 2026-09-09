@@ -13,7 +13,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState("");
 
-  const loadProfile = useCallback(async (userId) => {
+  const loadProfile = useCallback(async (userId, sessionUser = null) => {
     if (!userId) {
       setProfile(null);
       return;
@@ -31,6 +31,23 @@ export function AuthProvider({ children }) {
       return;
     }
 
+    if (data) {
+      const metaName =
+        sessionUser?.user_metadata?.full_name ||
+        sessionUser?.user_metadata?.name;
+      if (!data.full_name && metaName) {
+        try {
+          await supabase
+            .from("profiles")
+            .update({ full_name: metaName })
+            .eq("id", userId);
+          data.full_name = metaName;
+        } catch {
+          // Non-blocking
+        }
+      }
+    }
+
     setProfileError("");
     setProfile(data);
   }, []);
@@ -41,14 +58,14 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!active) return;
       setSession(data.session);
-      await loadProfile(data.session?.user?.id);
+      await loadProfile(data.session?.user?.id, data.session?.user);
       setLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event, nextSession) => {
         setSession(nextSession);
-        await loadProfile(nextSession?.user?.id);
+        await loadProfile(nextSession?.user?.id, nextSession?.user);
         setLoading(false);
       }
     );
@@ -98,7 +115,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const refreshProfile = useCallback(() => {
-    return loadProfile(session?.user?.id);
+    return loadProfile(session?.user?.id, session?.user);
   }, [loadProfile, session]);
 
   const value = {

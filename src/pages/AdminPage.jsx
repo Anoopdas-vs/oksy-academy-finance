@@ -380,7 +380,7 @@ function Users({ busy, actions }) {
       setMsg(`Created ${form.email}. Share the password with them; they can change it after signing in.`);
       setForm(emptyUser);
     } catch (err) {
-      setError(err.message || "Could not create the user. Is the create-user function deployed?");
+      setError(err.message || "Could not create user account. Please check the email and password.");
     }
   };
 
@@ -417,9 +417,6 @@ function Users({ busy, actions }) {
             {busy ? "Creating..." : "Create Login"}
           </button>
         </form>
-        <p className="receipt-note">
-          Needs the <code>create-user</code> Edge Function deployed (see supabase/functions/create-user).
-        </p>
       </div>
 
       <StaffAccess />

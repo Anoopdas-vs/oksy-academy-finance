@@ -42,11 +42,27 @@ const DEFAULT_ASSIGNMENTS = [
   },
 ];
 
-export default function AssignmentsPage({ isAdmin, batches = [] }) {
-  const [assignments, setAssignments] = useState(DEFAULT_ASSIGNMENTS);
+export default function AssignmentsPage({ isAdmin, role, batches = [] }) {
+  const canManage = isAdmin || role === "faculty";
+  const [assignments, setAssignments] = useState(() => {
+    try {
+      const saved = localStorage.getItem("oksy_assignments");
+      return saved ? JSON.parse(saved) : DEFAULT_ASSIGNMENTS;
+    } catch {
+      return DEFAULT_ASSIGNMENTS;
+    }
+  });
   const [filter, setFilter] = useState("All");
   const [activeModal, setActiveModal] = useState(null); // 'create' | 'submit' | 'grade'
   const [selectedAsg, setSelectedAsg] = useState(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("oksy_assignments", JSON.stringify(assignments));
+    } catch {
+      // ignore
+    }
+  }, [assignments]);
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -78,6 +94,12 @@ export default function AssignmentsPage({ isAdmin, batches = [] }) {
     };
     setAssignments((prev) => [newAsg, ...prev]);
     setActiveModal(null);
+  };
+
+  const handleDelete = (id) => {
+    if (window.confirm("Are you sure you want to delete this assignment?")) {
+      setAssignments((prev) => prev.filter((a) => a.id !== id));
+    }
   };
 
   const handleSubmit = (e) => {
@@ -140,7 +162,7 @@ export default function AssignmentsPage({ isAdmin, batches = [] }) {
           <p>Assign practical coursework, submit project deliverables, and track faculty feedback and grades.</p>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
-          {isAdmin && (
+          {canManage && (
             <button className="button primary" onClick={() => setActiveModal("create")}>
               + Create Assignment
             </button>
@@ -246,7 +268,7 @@ export default function AssignmentsPage({ isAdmin, batches = [] }) {
                       📤 Submit Project
                     </button>
                   )}
-                  {isAdmin && isSubmitted && !isGraded && (
+                  {canManage && isSubmitted && !isGraded && (
                     <button
                       className="button secondary"
                       onClick={() => {
@@ -256,6 +278,15 @@ export default function AssignmentsPage({ isAdmin, batches = [] }) {
                       }}
                     >
                       ✍ Grade Submission
+                    </button>
+                  )}
+                  {canManage && (
+                    <button
+                      className="button secondary"
+                      style={{ color: "var(--danger, #ef4444)" }}
+                      onClick={() => handleDelete(asg.id)}
+                    >
+                      Delete
                     </button>
                   )}
                 </div>
