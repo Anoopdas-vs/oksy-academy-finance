@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { formatMoney } from "../lib/format.js";
 import { effectiveFeeDue, outstanding } from "../lib/fees.js";
+import { fetchAcademySnapshot } from "../lib/academy.js";
 
 /* ------------------------------- helpers ------------------------------- */
 
@@ -102,6 +103,13 @@ function ExecutiveDashboard({
 }) {
   const go = (tab) => () => onNavigate(tab);
 
+  const [academy, setAcademy] = useState(null);
+  useEffect(() => {
+    let ok = true;
+    fetchAcademySnapshot().then((r) => { if (ok) setAcademy(r); });
+    return () => { ok = false; };
+  }, []);
+
   const monthly = useMemo(
     () => buildMonthlySeries(periodCollections, periodExpenses),
     [periodCollections, periodExpenses]
@@ -177,6 +185,58 @@ function ExecutiveDashboard({
           ))}
         </div>
       </SectionCard>
+
+      {/* B2. ACADEMY OPERATIONS */}
+      {academy && !academy.pending && academy.stats && (
+        <SectionCard
+          icon="📚"
+          title="Academy Operations"
+          subtitle="Assignments, exams, attendance and faculty feedback"
+          action={{ label: "Open Assignments", onClick: go("Assignments") }}
+        >
+          <div className="tile-grid five">
+            <StatTile
+              label="Published Assignments"
+              value={academy.stats.published}
+              icon="📋"
+              accent="blue"
+              caption={`${academy.stats.submissions} submissions`}
+              onClick={go("Assignments")}
+            />
+            <StatTile
+              label="Grading Done"
+              value={`${academy.stats.gradingPct}%`}
+              icon="✍️"
+              accent={academy.stats.gradingPct >= 80 ? "green" : "amber"}
+              caption="Of all submissions"
+            />
+            <StatTile
+              label="Exam Pass Rate"
+              value={`${academy.stats.passPct}%`}
+              icon="📝"
+              accent={academy.stats.passPct >= 60 ? "green" : "red"}
+              caption={`${academy.stats.examAttempts} attempts`}
+              onClick={go("Exams")}
+            />
+            <StatTile
+              label="Attendance"
+              value={`${academy.stats.attendancePct}%`}
+              icon="🎥"
+              accent={academy.stats.attendancePct >= 75 ? "green" : "amber"}
+              caption="Live class check-ins"
+              onClick={go("Live Class")}
+            />
+            <StatTile
+              label="Faculty Rating"
+              value={academy.stats.avgRating ? `${academy.stats.avgRating}/5` : "—"}
+              icon="⭐"
+              accent="violet"
+              caption={`${academy.stats.reviews} reviews`}
+              onClick={go("Reviews")}
+            />
+          </div>
+        </SectionCard>
+      )}
 
       {fullDashboard && (
         <>

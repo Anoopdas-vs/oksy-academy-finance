@@ -87,9 +87,10 @@ src/
     usePagedList.js         client-side search + pagination hook
 supabase/
   schema.sql               full DDL incl. Academy Suite — run ONCE on a fresh project
-  migration-*.sql (×7)      incremental patches, run IN ORDER after schema.sql
+  migration-*.sql (×9)      incremental patches, run IN ORDER after schema.sql
                             (…-v2.sql is the real Academy Suite: batch/faculty
-                            scoping, RLS, server-side exam scoring)
+                            scoping, RLS, server-side exam scoring;
+                            …-v2b.sql adds the submission-file Storage bucket)
   functions/create-user/    Deno Edge Function (admin-only user creation)
 ```
 

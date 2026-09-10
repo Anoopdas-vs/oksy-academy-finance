@@ -8,8 +8,30 @@ import {
   fetchSubmissions,
   submitAssignment,
   gradeSubmission,
+  uploadSubmissionFile,
+  signedSubmissionUrl,
   notifyBatch,
 } from "../lib/academy.js";
+
+// A submission file lives in a private bucket; fetch a short-lived signed URL
+// only when the viewer actually clicks to open it.
+function SubmissionFileLink({ path }) {
+  const [loading, setLoading] = useState(false);
+  if (!path) return null;
+  const name = path.split("/").pop().replace(/^\d+_/, "");
+  const open = async () => {
+    setLoading(true);
+    const { url, error } = await signedSubmissionUrl(path);
+    setLoading(false);
+    if (url) window.open(url, "_blank", "noopener");
+    else alert(error?.message || "Could not open the file.");
+  };
+  return (
+    <button type="button" className="button ghost small" onClick={open} disabled={loading}>
+      {loading ? "Opening…" : `📎 ${name}`}
+    </button>
+  );
+}
 
 const emptyCreate = { id: null, title: "", batch_name: "", due_date: today(), max_marks: 100, description: "" };
 
@@ -27,6 +49,7 @@ export default function AssignmentsPage({ access, batches = [] }) {
   const [current, setCurrent] = useState(null);
   const [createForm, setCreateForm] = useState(emptyCreate);
   const [submitForm, setSubmitForm] = useState({ link: "", notes: "" });
+  const [submitFile, setSubmitFile] = useState(null);
   const [gradeForm, setGradeForm] = useState({ marks: "", feedback: "" });
   const [busy, setBusy] = useState(false);
 
@@ -100,12 +123,25 @@ export default function AssignmentsPage({ access, batches = [] }) {
     const ex = mySub(a.id);
     setCurrent(a);
     setSubmitForm({ link: ex?.link || "", notes: ex?.notes || "" });
+    setSubmitFile(null);
     setModal("submit");
   };
   const doSubmit = async (e) => {
-    e.preventDefault(); setBusy(true); setErr("");
+    e.preventDefault();
+    const existing = mySub(current.id);
+    if (!submitForm.link.trim() && !submitFile && !existing?.file_path) {
+      setErr("Add a URL or attach a file.");
+      return;
+    }
+    setBusy(true); setErr("");
+    let filePath = existing?.file_path ?? null;
+    if (submitFile) {
+      const up = await uploadSubmissionFile(current.id, access.userId, submitFile);
+      if (up.error) { setBusy(false); setErr(`Upload failed: ${up.error.message}`); return; }
+      filePath = up.path;
+    }
     const isLate = current.due_date && today() > current.due_date;
-    const { error } = await submitAssignment(current.id, access.userId, { ...submitForm, isLate });
+    const { error } = await submitAssignment(current.id, access.userId, { ...submitForm, isLate, filePath });
     setBusy(false);
     if (error) { setErr(error.message); return; }
     setModal(null); load();
@@ -204,6 +240,7 @@ export default function AssignmentsPage({ access, batches = [] }) {
                         {sub.is_late ? " · late" : ""}
                       </strong>
                       {sub.feedback && <span>Feedback: “{sub.feedback}”</span>}
+                      {sub.file_path && <SubmissionFileLink path={sub.file_path} />}
                     </div>
                   )}
                 </div>
@@ -245,7 +282,21 @@ export default function AssignmentsPage({ access, batches = [] }) {
         <Modal title={`Submit: ${current.title}`} onClose={() => setModal(null)}>
           <form className="form-grid" onSubmit={doSubmit}>
             {err && <div className="form-error-banner">{err}</div>}
-            <Input label="Project / repo / drive URL" value={submitForm.link} onChange={(v) => setSubmitForm({ ...submitForm, link: v })} required />
+            <Input label="Project / repo / drive URL" value={submitForm.link} onChange={(v) => setSubmitForm({ ...submitForm, link: v })} />
+            <div className="field">
+              <label>Attach a file (optional)</label>
+              <input
+                type="file"
+                className="input"
+                accept=".pdf,.zip,.doc,.docx,.png,.jpg,.jpeg,.txt,.csv,.xlsx,.pptx"
+                onChange={(e) => setSubmitFile(e.target.files?.[0] || null)}
+              />
+              {mySub(current.id)?.file_path && !submitFile && (
+                <p style={{ margin: "4px 0 0" }}>
+                  Current: <SubmissionFileLink path={mySub(current.id).file_path} />
+                </p>
+              )}
+            </div>
             <div className="field">
               <label>Notes</label>
               <textarea className="input" rows={4} value={submitForm.notes} onChange={(e) => setSubmitForm({ ...submitForm, notes: e.target.value })} />
@@ -265,6 +316,7 @@ export default function AssignmentsPage({ access, batches = [] }) {
           <form className="form-grid" onSubmit={doGrade}>
             {err && <div className="form-error-banner">{err}</div>}
             {current.sub.link && <p><a href={current.sub.link} target="_blank" rel="noreferrer">{current.sub.link}</a></p>}
+            {current.sub.file_path && <p><SubmissionFileLink path={current.sub.file_path} /></p>}
             {current.sub.notes && <p style={{ color: "var(--muted)" }}>{current.sub.notes}</p>}
             <Input label={`Marks (out of ${current.a.max_marks})`} type="number" min="0" max={current.a.max_marks} value={gradeForm.marks} onChange={(v) => setGradeForm({ ...gradeForm, marks: v })} required />
             <div className="field">
@@ -290,7 +342,10 @@ export default function AssignmentsPage({ access, batches = [] }) {
                   <td>{s.student_id.slice(0, 8)}…</td>
                   <td>{(s.submitted_at || "").slice(0, 10)}{s.is_late ? " · late" : ""}</td>
                   <td>{s.status === "graded" ? `${s.marks}/${current.max_marks}` : "Submitted"}</td>
-                  <td><button className="button secondary small" onClick={() => openGrade(current, s)}>Grade</button></td>
+                  <td className="row-actions">
+                    {s.file_path && <SubmissionFileLink path={s.file_path} />}
+                    <button className="button secondary small" onClick={() => openGrade(current, s)}>Grade</button>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -84,6 +84,11 @@ export async function fetchAttendance(sessionId) {
   return { rows: data || [], error: soft(error) };
 }
 
+export async function fetchAllAttendance() {
+  const { data, error } = await supabase.from("attendance").select("session_id, student_id, present");
+  return { rows: data || [], error: soft(error) };
+}
+
 // -------------------------------------------------------------- Assignments ---
 
 export async function fetchAssignments() {
@@ -115,7 +120,7 @@ export async function fetchSubmissions(assignmentIds) {
   return { rows: data || [], error: soft(error) };
 }
 
-export async function submitAssignment(assignmentId, studentId, { link, notes, isLate }) {
+export async function submitAssignment(assignmentId, studentId, { link, notes, isLate, filePath }) {
   const { data, error } = await supabase
     .from("assignment_submissions")
     .upsert(
@@ -124,6 +129,7 @@ export async function submitAssignment(assignmentId, studentId, { link, notes, i
         student_id: studentId,
         link,
         notes,
+        file_path: filePath ?? null,
         is_late: !!isLate,
         submitted_at: new Date().toISOString(),
         status: "submitted",
@@ -133,6 +139,25 @@ export async function submitAssignment(assignmentId, studentId, { link, notes, i
     .select()
     .single();
   return { row: data, error: soft(error) };
+}
+
+// Upload a submission file to the private `submissions` bucket. Returns its
+// storage path (store on assignment_submissions.file_path).
+export async function uploadSubmissionFile(assignmentId, studentId, file) {
+  const safe = file.name.replace(/[^\w.-]+/g, "_");
+  const path = `${assignmentId}/${studentId}/${Date.now()}_${safe}`;
+  const { error } = await supabase.storage
+    .from("submissions")
+    .upload(path, file, { upsert: true });
+  return { path, error: soft(error) };
+}
+
+export async function signedSubmissionUrl(path, expiresIn = 300) {
+  if (!path) return { url: null, error: null };
+  const { data, error } = await supabase.storage
+    .from("submissions")
+    .createSignedUrl(path, expiresIn);
+  return { url: data?.signedUrl || null, error: soft(error) };
 }
 
 export async function gradeSubmission(id, { marks, feedback, graderId }) {
@@ -241,6 +266,20 @@ export async function fetchExamAttempts(examId) {
   return { rows: data || [], error: soft(error) };
 }
 
+export async function fetchAllExamAttempts() {
+  const { data, error } = await supabase.from("exam_attempts").select("*");
+  return { rows: data || [], error: soft(error) };
+}
+
+// Saved answers for an in-progress attempt — used to resume after a refresh.
+export async function fetchExamAnswers(attemptId) {
+  const { data, error } = await supabase
+    .from("exam_answers")
+    .select("*")
+    .eq("attempt_id", attemptId);
+  return { rows: data || [], error: soft(error) };
+}
+
 export async function fetchMyExamAttempts(studentId) {
   const { data, error } = await supabase
     .from("exam_attempts")
@@ -266,6 +305,49 @@ export async function submitFacultyReview(review) {
     .select()
     .single();
   return { row: data, error: soft(error) };
+}
+
+// ----------------------------------------------------- Executive analytics ---
+
+// One round of parallel reads → the numbers the Executive dashboard shows.
+// Any table still missing (migration not run) is treated as empty.
+export async function fetchAcademySnapshot() {
+  const [asg, subs, exams, attempts, att, reviews] = await Promise.all([
+    fetchAssignments(),
+    fetchSubmissions(),
+    fetchExams(),
+    fetchAllExamAttempts(),
+    fetchAllAttendance(),
+    fetchFacultyReviews(),
+  ]);
+  if (asg.error?.suitePending) return { pending: true, stats: null };
+
+  const submissions = subs.rows || [];
+  const graded = submissions.filter((s) => s.status === "graded");
+  const attList = att.rows || [];
+  const present = attList.filter((a) => a.present).length;
+  const done = (attempts.rows || []).filter((a) => a.submitted_at);
+  const passed = done.filter((a) => a.passed).length;
+  const rv = reviews.rows || [];
+  const avgRating = rv.length
+    ? rv.reduce((s, r) => s + Number(r.rating || 0), 0) / rv.length
+    : 0;
+
+  return {
+    pending: false,
+    stats: {
+      assignments: (asg.rows || []).length,
+      published: (asg.rows || []).filter((a) => a.status === "published").length,
+      submissions: submissions.length,
+      gradingPct: submissions.length ? Math.round((graded.length / submissions.length) * 100) : 0,
+      exams: (exams.rows || []).length,
+      examAttempts: done.length,
+      passPct: done.length ? Math.round((passed / done.length) * 100) : 0,
+      attendancePct: attList.length ? Math.round((present / attList.length) * 100) : 0,
+      reviews: rv.length,
+      avgRating: Math.round(avgRating * 10) / 10,
+    },
+  };
 }
 
 // ------------------------------------------------------------- Notifications ---
