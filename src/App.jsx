@@ -259,7 +259,6 @@ function AppShell() {
 
   // Fee receipt to show/print after a collection is recorded.
   const [receipt, setReceipt] = useState(null);
-  const [liveClassInfo, setLiveClassInfo] = useState(null);
 
   // Global top-bar period filter: { preset, start, end }. Drives the money
   // views (Dashboard financials + chart, Fee Collection & Expenses lists).
@@ -1340,42 +1339,24 @@ function AppShell() {
 
         {activeTab === "Timetable" && (
           <TimetablePage
-            isAdmin={isAdmin}
-            role={access.role}
+            access={access}
             batches={batches}
-            onNavigateToClass={(subject, link) => {
-              setLiveClassInfo({ subject, link });
-              setActiveTab("Live Class");
-            }}
+            onOpenLiveClass={() => setActiveTab("Live Class")}
           />
         )}
 
-        {activeTab === "Live Class" && (
-          <LiveClassPage
-            initialRoom={liveClassInfo?.link}
-            initialTitle={liveClassInfo?.subject}
-          />
-        )}
+        {activeTab === "Live Class" && <LiveClassPage access={access} />}
 
         {activeTab === "Assignments" && (
-          <AssignmentsPage
-            isAdmin={isAdmin}
-            role={access.role}
-            batches={batches}
-          />
+          <AssignmentsPage access={access} profile={profile} batches={batches} />
         )}
 
         {activeTab === "Exams" && (
-          <ExamsPage
-            isAdmin={isAdmin}
-            role={access.role}
-          />
+          <ExamsPage access={access} profile={profile} batches={batches} />
         )}
 
         {activeTab === "Reviews" && (
-          <ReviewsPage
-            profile={profile}
-          />
+          <ReviewsPage access={access} profile={profile} />
         )}
 
         {activeTab === "Enrollment" && (

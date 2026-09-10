@@ -1,429 +1,300 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Input } from "../components/ui.jsx";
 import { today } from "../lib/format.js";
+import {
+  fetchAssignments,
+  saveAssignment,
+  deleteAssignment,
+  fetchSubmissions,
+  submitAssignment,
+  gradeSubmission,
+  notifyBatch,
+} from "../lib/academy.js";
 
-const DEFAULT_ASSIGNMENTS = [
-  {
-    id: "asg_1",
-    title: "E-Commerce Database Schema Design",
-    batch: "FSW-2026-A",
-    dueDate: "2026-09-18",
-    maxMarks: 50,
-    status: "Pending",
-    description: "Design a normalized PostgreSQL schema with tables for users, products, orders, order_items, and payments. Include ER diagrams and foreign key constraints.",
-    submission: null,
-  },
-  {
-    id: "asg_2",
-    title: "React Full-Stack Financial Dashboard",
-    batch: "FSW-2026-A",
-    dueDate: "2026-09-22",
-    maxMarks: 100,
-    status: "Submitted",
-    description: "Build a responsive React dashboard with chart analytics, filters, and Supabase authentication. Submit GitHub repo link and live demo URL.",
-    submission: {
-      date: "2026-09-08",
-      link: "https://github.com/student/oksy-dashboard",
-      notes: "Implemented all views with dark mode and chart tooltips.",
-      marks: 92,
-      feedback: "Excellent architecture and clean code separation!",
-      status: "Graded",
-    },
-  },
-  {
-    id: "asg_3",
-    title: "Double-Entry Ledger Balancing Case Study",
-    batch: "BCOM-2026",
-    dueDate: "2026-09-15",
-    maxMarks: 50,
-    status: "Pending",
-    description: "Review the provided case study and reconcile the bank accounts against cash ledger entries. Detail all reconciling items.",
-    submission: null,
-  },
-];
+const emptyCreate = { id: null, title: "", batch_name: "", due_date: today(), max_marks: 100, description: "" };
 
-export default function AssignmentsPage({ isAdmin, role, batches = [] }) {
-  const canManage = isAdmin || role === "faculty";
-  const [assignments, setAssignments] = useState(() => {
-    try {
-      const saved = localStorage.getItem("oksy_assignments");
-      return saved ? JSON.parse(saved) : DEFAULT_ASSIGNMENTS;
-    } catch {
-      return DEFAULT_ASSIGNMENTS;
-    }
-  });
-  const [filter, setFilter] = useState("All");
-  const [activeModal, setActiveModal] = useState(null); // 'create' | 'submit' | 'grade'
-  const [selectedAsg, setSelectedAsg] = useState(null);
+export default function AssignmentsPage({ access, batches = [] }) {
+  const canManage = access.isStaffOrAdmin || access.isFaculty;
+  const isStudent = access.isStudent;
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("oksy_assignments", JSON.stringify(assignments));
-    } catch {
-      // ignore
-    }
-  }, [assignments]);
+  const [assignments, setAssignments] = useState([]);
+  const [subs, setSubs] = useState([]);
+  const [pending, setPending] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [modal, setModal] = useState(null); // 'create' | 'submit' | 'grade' | 'subs'
+  const [current, setCurrent] = useState(null);
+  const [createForm, setCreateForm] = useState(emptyCreate);
+  const [submitForm, setSubmitForm] = useState({ link: "", notes: "" });
+  const [gradeForm, setGradeForm] = useState({ marks: "", feedback: "" });
+  const [busy, setBusy] = useState(false);
 
-  // Form states
-  const [createForm, setCreateForm] = useState({
-    title: "",
-    batch: batches[0]?.name || "FSW-2026-A",
-    dueDate: today(),
-    maxMarks: 100,
-    description: "",
-  });
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { rows, error } = await fetchAssignments();
+    if (error?.suitePending) { setPending(true); setLoading(false); return; }
+    if (error) setErr(error.message);
+    setAssignments(rows);
+    const { rows: sr } = await fetchSubmissions(rows.map((a) => a.id));
+    setSubs(sr);
+    setLoading(false);
+  }, []);
 
-  const [submitForm, setSubmitForm] = useState({
-    link: "",
-    notes: "",
-  });
+  useEffect(() => { load(); }, [load]);
 
-  const [gradeForm, setGradeForm] = useState({
-    marks: "",
-    feedback: "",
-  });
+  const mySub = useCallback(
+    (asgId) => subs.find((s) => s.assignment_id === asgId && s.student_id === access.userId),
+    [subs, access.userId]
+  );
+  const subsFor = useCallback((asgId) => subs.filter((s) => s.assignment_id === asgId), [subs]);
 
-  const handleCreate = (e) => {
-    e.preventDefault();
-    if (!createForm.title) return;
-    const newAsg = {
-      ...createForm,
-      id: "asg_" + Date.now(),
-      status: "Pending",
-      submission: null,
-    };
-    setAssignments((prev) => [newAsg, ...prev]);
-    setActiveModal(null);
-  };
-
-  const handleDelete = (id) => {
-    if (window.confirm("Are you sure you want to delete this assignment?")) {
-      setAssignments((prev) => prev.filter((a) => a.id !== id));
-    }
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!submitForm.link && !submitForm.notes) return;
-    setAssignments((prev) =>
-      prev.map((a) =>
-        a.id === selectedAsg.id
-          ? {
-              ...a,
-              status: "Submitted",
-              submission: {
-                date: today(),
-                link: submitForm.link,
-                notes: submitForm.notes,
-                marks: null,
-                feedback: null,
-                status: "Under Review",
-              },
-            }
-          : a
-      )
-    );
-    setActiveModal(null);
-    alert("Project submitted successfully!");
-  };
-
-  const handleGrade = (e) => {
-    e.preventDefault();
-    setAssignments((prev) =>
-      prev.map((a) =>
-        a.id === selectedAsg.id
-          ? {
-              ...a,
-              submission: {
-                ...a.submission,
-                marks: Number(gradeForm.marks),
-                feedback: gradeForm.feedback,
-                status: "Graded",
-              },
-            }
-          : a
-      )
-    );
-    setActiveModal(null);
-  };
-
-  const filtered = assignments.filter((a) => {
-    if (filter === "Pending") return a.status === "Pending";
-    if (filter === "Submitted") return a.status === "Submitted" && a.submission?.status !== "Graded";
-    if (filter === "Graded") return a.submission?.status === "Graded";
+  const visible = useMemo(() => assignments.filter((a) => {
+    if (isStudent && a.status !== "published") return false;
+    if (filter === "published") return a.status === "published";
+    if (filter === "draft") return a.status === "draft";
     return true;
-  });
+  }), [assignments, filter, isStudent]);
+
+  const openCreate = () => { setCreateForm({ ...emptyCreate, batch_name: batches[0]?.name || "" }); setModal("create"); };
+  const openEdit = (a) => {
+    setCurrent(a);
+    setCreateForm({ id: a.id, title: a.title, batch_name: a.batch_name, due_date: a.due_date || today(), max_marks: a.max_marks, description: a.description || "" });
+    setModal("create");
+  };
+
+  const doSave = async (publish) => {
+    setBusy(true); setErr("");
+    const payload = {
+      ...(createForm.id ? { id: createForm.id } : {}),
+      title: createForm.title.trim(),
+      batch_name: createForm.batch_name,
+      description: createForm.description.trim() || null,
+      max_marks: Number(createForm.max_marks) || 100,
+      due_date: createForm.due_date || null,
+      faculty_id: access.userId,
+      created_by: access.userId,
+      status: publish ? "published" : "draft",
+      ...(publish ? { published_at: new Date().toISOString() } : {}),
+    };
+    const { row, error } = await saveAssignment(payload);
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    if (publish && row) {
+      notifyBatch(row.batch_name, {
+        type: "assignment",
+        title: `New assignment: ${row.title}`,
+        body: row.due_date ? `Due ${row.due_date}` : "",
+        link: "Assignments",
+      });
+    }
+    setModal(null); load();
+  };
+
+  const doDelete = async (a) => {
+    if (!window.confirm(`Delete "${a.title}"?`)) return;
+    await deleteAssignment(a.id); load();
+  };
+
+  const openSubmit = (a) => {
+    const ex = mySub(a.id);
+    setCurrent(a);
+    setSubmitForm({ link: ex?.link || "", notes: ex?.notes || "" });
+    setModal("submit");
+  };
+  const doSubmit = async (e) => {
+    e.preventDefault(); setBusy(true); setErr("");
+    const isLate = current.due_date && today() > current.due_date;
+    const { error } = await submitAssignment(current.id, access.userId, { ...submitForm, isLate });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    setModal(null); load();
+  };
+
+  const openGrade = (a, sub) => { setCurrent({ a, sub }); setGradeForm({ marks: sub.marks ?? "", feedback: sub.feedback || "" }); setModal("grade"); };
+  const doGrade = async (e) => {
+    e.preventDefault(); setBusy(true); setErr("");
+    const { error } = await gradeSubmission(current.sub.id, {
+      marks: Number(gradeForm.marks),
+      feedback: gradeForm.feedback,
+      graderId: access.userId,
+    });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    setModal(null); load();
+  };
 
   return (
     <section className="page">
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
+      <div className="page-header">
         <div>
-          <h2>Projects & Assignments</h2>
-          <p>Assign practical coursework, submit project deliverables, and track faculty feedback and grades.</p>
+          <h2>Assignments</h2>
+          <p>{canManage ? "Create, publish and grade coursework." : "Your coursework and grades."}</p>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          {canManage && (
-            <button className="button primary" onClick={() => setActiveModal("create")}>
-              + Create Assignment
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
-        {["All", "Pending", "Submitted", "Graded"].map((tab) => (
-          <button
-            key={tab}
-            className={`button ${filter === tab ? "primary" : "secondary"}`}
-            onClick={() => setFilter(tab)}
-            style={{ borderRadius: "9999px", padding: "0.4rem 1rem", fontSize: "0.85rem" }}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        {filtered.length === 0 ? (
-          <div className="table-card" style={{ padding: "3rem", textAlign: "center", color: "var(--text-muted, #64748b)" }}>
-            No assignments match this filter.
-          </div>
-        ) : (
-          filtered.map((asg) => {
-            const isGraded = asg.submission?.status === "Graded";
-            const isSubmitted = asg.status === "Submitted";
-
-            return (
-              <div
-                key={asg.id}
-                className="table-card"
-                style={{
-                  padding: "1.5rem",
-                  borderLeft: isGraded
-                    ? "4px solid #10b981"
-                    : isSubmitted
-                    ? "4px solid #3b82f6"
-                    : "4px solid #f59e0b",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.4rem" }}>
-                      <span style={{ fontSize: "0.8rem", padding: "0.15rem 0.5rem", background: "var(--border, #e2e8f0)", borderRadius: "4px" }}>
-                        {asg.batch}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "0.8rem",
-                          fontWeight: "600",
-                          color: isGraded ? "#10b981" : isSubmitted ? "#3b82f6" : "#d97706",
-                        }}
-                      >
-                        ● {isGraded ? `Graded: ${asg.submission.marks}/${asg.maxMarks}` : isSubmitted ? "Submitted" : "Pending Submission"}
-                      </span>
-                    </div>
-                    <h3 style={{ margin: "0.25rem 0" }}>{asg.title}</h3>
-                  </div>
-
-                  <div style={{ textAlign: "right", fontSize: "0.85rem" }}>
-                    <div>Due: <strong>{asg.dueDate}</strong></div>
-                    <div style={{ color: "var(--text-muted, #64748b)" }}>Max Marks: {asg.maxMarks}</div>
-                  </div>
-                </div>
-
-                <p style={{ margin: "0.75rem 0", color: "var(--text-muted, #475569)", fontSize: "0.95rem", lineHeight: "1.5" }}>
-                  {asg.description}
-                </p>
-
-                {asg.submission && (
-                  <div style={{ marginTop: "1rem", padding: "0.8rem", background: "var(--accent-light, #f8fafc)", borderRadius: "8px", fontSize: "0.9rem" }}>
-                    <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>Submission Details:</div>
-                    {asg.submission.link && (
-                      <div>
-                        Project URL:{" "}
-                        <a href={asg.submission.link} target="_blank" rel="noreferrer" style={{ color: "var(--accent, #2563eb)" }}>
-                          {asg.submission.link}
-                        </a>
-                      </div>
-                    )}
-                    {asg.submission.notes && <div style={{ marginTop: "0.25rem" }}>Notes: {asg.submission.notes}</div>}
-                    {asg.submission.feedback && (
-                      <div style={{ marginTop: "0.4rem", color: "#065f46", fontWeight: "500" }}>
-                        Faculty Feedback: "{asg.submission.feedback}"
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                  {!isSubmitted && (
-                    <button
-                      className="button primary"
-                      onClick={() => {
-                        setSelectedAsg(asg);
-                        setSubmitForm({ link: "", notes: "" });
-                        setActiveModal("submit");
-                      }}
-                    >
-                      📤 Submit Project
-                    </button>
-                  )}
-                  {canManage && isSubmitted && !isGraded && (
-                    <button
-                      className="button secondary"
-                      onClick={() => {
-                        setSelectedAsg(asg);
-                        setGradeForm({ marks: "", feedback: "" });
-                        setActiveModal("grade");
-                      }}
-                    >
-                      ✍ Grade Submission
-                    </button>
-                  )}
-                  {canManage && (
-                    <button
-                      className="button secondary"
-                      style={{ color: "var(--danger, #ef4444)" }}
-                      onClick={() => handleDelete(asg.id)}
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })
+        {canManage && !pending && (
+          <button className="button primary" onClick={openCreate}>+ Create assignment</button>
         )}
       </div>
 
-      {activeModal === "create" && (
-        <Modal title="Create New Assignment" onClose={() => setActiveModal(null)}>
-          <form onSubmit={handleCreate} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <div className="field">
-              <label>Assignment Title</label>
-              <Input
-                required
-                placeholder="e.g. React Full-Stack App"
-                value={createForm.title}
-                onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
-              />
+      {pending && (
+        <div className="empty-state">
+          <div className="empty-icon">📋</div>
+          <h3>Assignments setup pending</h3>
+          <p>Run <code>supabase/migration-academy-suite-v2.sql</code> to enable assignments.</p>
+        </div>
+      )}
+      {err && <div className="auth-message error">{err}</div>}
+
+      {!pending && (
+        <>
+          {canManage && (
+            <div className="toolbar">
+              <div className="subtab-switch">
+                {["all", "published", "draft"].map((f) => (
+                  <button key={f} className={filter === f ? "subtab active" : "subtab"} onClick={() => setFilter(f)}>
+                    {f[0].toUpperCase() + f.slice(1)}
+                  </button>
+                ))}
+              </div>
             </div>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {loading && <div className="table-card" style={{ padding: "2rem" }}>Loading…</div>}
+            {!loading && visible.length === 0 && (
+              <div className="table-card table-empty" style={{ padding: "2rem" }}>Nothing here yet.</div>
+            )}
+            {visible.map((a) => {
+              const sub = isStudent ? mySub(a.id) : null;
+              const all = subsFor(a.id);
+              const graded = all.filter((s) => s.status === "graded").length;
+              return (
+                <div key={a.id} className="table-card" style={{ padding: "1.25rem" }}>
+                  <div className="card-heading between">
+                    <div>
+                      <h3 style={{ margin: 0 }}>{a.title}</h3>
+                      <p style={{ margin: "2px 0 0" }}>
+                        <span className="mini-tag">{a.batch_name}</span>{" "}
+                        {a.status === "draft" && <span className="mini-tag warn">Draft</span>}
+                        {a.due_date && <> · Due {a.due_date}</>} · {a.max_marks} marks
+                      </p>
+                    </div>
+                    <div className="row-actions">
+                      {isStudent && (
+                        <button className="button primary small" onClick={() => openSubmit(a)}>
+                          {sub ? (sub.status === "graded" ? "View" : "Edit submission") : "Submit"}
+                        </button>
+                      )}
+                      {canManage && (
+                        <>
+                          <button className="button secondary small" onClick={() => { setCurrent(a); setModal("subs"); }}>
+                            Submissions ({graded}/{all.length})
+                          </button>
+                          <button className="button secondary small" onClick={() => openEdit(a)}>Edit</button>
+                          <button className="button ghost small danger" onClick={() => doDelete(a)}>Delete</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {a.description && <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>{a.description}</p>}
+                  {isStudent && sub && (
+                    <div className="info-box">
+                      <strong>
+                        {sub.status === "graded" ? `Graded: ${sub.marks}/${a.max_marks}` : "Submitted — awaiting review"}
+                        {sub.is_late ? " · late" : ""}
+                      </strong>
+                      {sub.feedback && <span>Feedback: “{sub.feedback}”</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {modal === "create" && (
+        <Modal title={createForm.id ? "Edit assignment" : "Create assignment"} onClose={() => setModal(null)}>
+          <form className="form-grid" onSubmit={(e) => { e.preventDefault(); doSave(true); }}>
+            {err && <div className="form-error-banner">{err}</div>}
+            <Input label="Title" value={createForm.title} onChange={(v) => setCreateForm({ ...createForm, title: v })} required />
             <div className="field">
               <label>Batch</label>
-              <Input
-                placeholder="e.g. FSW-2026-A"
-                value={createForm.batch}
-                onChange={(e) => setCreateForm({ ...createForm, batch: e.target.value })}
-              />
+              <select value={createForm.batch_name} onChange={(e) => setCreateForm({ ...createForm, batch_name: e.target.value })} required>
+                <option value="">— select —</option>
+                {batches.map((b) => <option key={b.id} value={b.name}>{b.name}</option>)}
+              </select>
+            </div>
+            <div className="field-row">
+              <Input label="Due date" type="date" value={createForm.due_date} onChange={(v) => setCreateForm({ ...createForm, due_date: v })} />
+              <Input label="Max marks" type="number" min="1" value={createForm.max_marks} onChange={(v) => setCreateForm({ ...createForm, max_marks: v })} required />
             </div>
             <div className="field">
-              <label>Due Date</label>
-              <Input
-                type="date"
-                required
-                value={createForm.dueDate}
-                onChange={(e) => setCreateForm({ ...createForm, dueDate: e.target.value })}
-              />
+              <label>Instructions</label>
+              <textarea className="input" rows={4} value={createForm.description} onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })} />
             </div>
+            <div className="form-actions">
+              <button type="button" className="button secondary" onClick={() => doSave(false)} disabled={busy}>Save draft</button>
+              <button type="submit" className="button primary" disabled={busy}>{busy ? "Saving…" : "Publish"}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {modal === "submit" && current && (
+        <Modal title={`Submit: ${current.title}`} onClose={() => setModal(null)}>
+          <form className="form-grid" onSubmit={doSubmit}>
+            {err && <div className="form-error-banner">{err}</div>}
+            <Input label="Project / repo / drive URL" value={submitForm.link} onChange={(v) => setSubmitForm({ ...submitForm, link: v })} required />
             <div className="field">
-              <label>Max Marks</label>
-              <Input
-                type="number"
-                required
-                value={createForm.maxMarks}
-                onChange={(e) => setCreateForm({ ...createForm, maxMarks: e.target.value })}
-              />
+              <label>Notes</label>
+              <textarea className="input" rows={4} value={submitForm.notes} onChange={(e) => setSubmitForm({ ...submitForm, notes: e.target.value })} />
             </div>
-            <div className="field">
-              <label>Instructions & Description</label>
-              <textarea
-                className="input"
-                rows={4}
-                required
-                value={createForm.description}
-                onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-              />
-            </div>
-            <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <button type="button" className="button secondary" onClick={() => setActiveModal(null)}>
-                Cancel
-              </button>
-              <button type="submit" className="button primary">
-                Publish Assignment
+            <div className="form-actions">
+              <button type="button" className="button secondary" onClick={() => setModal(null)} disabled={busy}>Cancel</button>
+              <button type="submit" className="button primary" disabled={busy || mySub(current.id)?.status === "graded"}>
+                {busy ? "Submitting…" : "Submit"}
               </button>
             </div>
           </form>
         </Modal>
       )}
 
-      {activeModal === "submit" && selectedAsg && (
-        <Modal title={`Submit Project: ${selectedAsg.title}`} onClose={() => setActiveModal(null)}>
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      {modal === "grade" && current?.sub && (
+        <Modal title="Grade submission" onClose={() => setModal(null)}>
+          <form className="form-grid" onSubmit={doGrade}>
+            {err && <div className="form-error-banner">{err}</div>}
+            {current.sub.link && <p><a href={current.sub.link} target="_blank" rel="noreferrer">{current.sub.link}</a></p>}
+            {current.sub.notes && <p style={{ color: "var(--muted)" }}>{current.sub.notes}</p>}
+            <Input label={`Marks (out of ${current.a.max_marks})`} type="number" min="0" max={current.a.max_marks} value={gradeForm.marks} onChange={(v) => setGradeForm({ ...gradeForm, marks: v })} required />
             <div className="field">
-              <label>Project / GitHub / Drive URL</label>
-              <Input
-                required
-                placeholder="https://github.com/your-username/project"
-                value={submitForm.link}
-                onChange={(e) => setSubmitForm({ ...submitForm, link: e.target.value })}
-              />
+              <label>Feedback</label>
+              <textarea className="input" rows={4} value={gradeForm.feedback} onChange={(e) => setGradeForm({ ...gradeForm, feedback: e.target.value })} />
             </div>
-            <div className="field">
-              <label>Submission Comments / Summary</label>
-              <textarea
-                className="input"
-                rows={4}
-                placeholder="Briefly describe what you built, libraries used, or any notes for the instructor..."
-                value={submitForm.notes}
-                onChange={(e) => setSubmitForm({ ...submitForm, notes: e.target.value })}
-              />
-            </div>
-            <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <button type="button" className="button secondary" onClick={() => setActiveModal(null)}>
-                Cancel
-              </button>
-              <button type="submit" className="button primary">
-                Confirm & Submit
-              </button>
+            <div className="form-actions">
+              <button type="button" className="button secondary" onClick={() => setModal(null)} disabled={busy}>Cancel</button>
+              <button type="submit" className="button primary" disabled={busy}>{busy ? "Saving…" : "Save grade"}</button>
             </div>
           </form>
         </Modal>
       )}
 
-      {activeModal === "grade" && selectedAsg && (
-        <Modal title={`Grade Submission: ${selectedAsg.title}`} onClose={() => setActiveModal(null)}>
-          <form onSubmit={handleGrade} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <div className="field">
-              <label>Score (Out of {selectedAsg.maxMarks})</label>
-              <Input
-                type="number"
-                max={selectedAsg.maxMarks}
-                min={0}
-                required
-                placeholder={`0 - ${selectedAsg.maxMarks}`}
-                value={gradeForm.marks}
-                onChange={(e) => setGradeForm({ ...gradeForm, marks: e.target.value })}
-              />
-            </div>
-            <div className="field">
-              <label>Instructor Feedback</label>
-              <textarea
-                className="input"
-                rows={4}
-                placeholder="Great work on data normalization..."
-                value={gradeForm.feedback}
-                onChange={(e) => setGradeForm({ ...gradeForm, feedback: e.target.value })}
-              />
-            </div>
-            <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <button type="button" className="button secondary" onClick={() => setActiveModal(null)}>
-                Cancel
-              </button>
-              <button type="submit" className="button primary">
-                Save Grade
-              </button>
-            </div>
-          </form>
+      {modal === "subs" && current && (
+        <Modal title={`Submissions — ${current.title}`} onClose={() => setModal(null)}>
+          <table>
+            <thead><tr><th>Student</th><th>When</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {subsFor(current.id).length === 0 && <tr><td colSpan={4} className="table-empty">No submissions yet.</td></tr>}
+              {subsFor(current.id).map((s) => (
+                <tr key={s.id}>
+                  <td>{s.student_id.slice(0, 8)}…</td>
+                  <td>{(s.submitted_at || "").slice(0, 10)}{s.is_late ? " · late" : ""}</td>
+                  <td>{s.status === "graded" ? `${s.marks}/${current.max_marks}` : "Submitted"}</td>
+                  <td><button className="button secondary small" onClick={() => openGrade(current, s)}>Grade</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Modal>
       )}
     </section>
