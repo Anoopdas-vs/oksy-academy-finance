@@ -5,6 +5,8 @@ import {
   bookBalanceAsOf,
   autoMatch,
   reconciliationSummary,
+  matchKindLabel,
+  matchedRecordDetail,
 } from "./reconcile.js";
 
 describe("accountLedger", () => {
@@ -62,6 +64,70 @@ describe("autoMatch", () => {
     assert.equal(matches[1].status, "matched");
     assert.equal(matches[1].match_id, "e1");
     assert.equal(matches[2].status, "unmatched");
+  });
+});
+
+describe("matchKindLabel", () => {
+  it("reads 'collection' as 'fee collection' and passes others through", () => {
+    assert.equal(matchKindLabel("collection"), "fee collection");
+    assert.equal(matchKindLabel("expense"), "expense");
+    assert.equal(matchKindLabel("transfer"), "transfer");
+    assert.equal(matchKindLabel(undefined), "record");
+  });
+});
+
+describe("matchedRecordDetail", () => {
+  const data = {
+    collections: [
+      { id: "c1", student_id: "DBHM001", student_name: "Asha K", type: "Course Fee", account: "ICICI", amount: 15000, date: "2026-04-02" },
+    ],
+    expenses: [
+      { id: 7, category: "Rent", description: "April rent", account: "HDFC", amount: 30000, date: "2026-04-01" },
+    ],
+    transfers: [
+      { id: "t1", from_account: "Cash", to_account: "ICICI", purpose: "Cash deposit", reference: "DEP-9", amount: 5000, date: "2026-04-03" },
+    ],
+  };
+  const students = [{ id: "DBHM001", name: "Asha K", batch: "DBHM-2026" }];
+
+  it("returns fee-collection fields incl. student id, name, batch and amount", () => {
+    const d = matchedRecordDetail({ match_kind: "collection", match_id: "c1" }, data, students);
+    assert.equal(d.title, "Fee collection");
+    const map = Object.fromEntries(d.rows.map((r) => [r.k, r.v]));
+    assert.equal(map["Student ID"], "DBHM001");
+    assert.equal(map["Student"], "Asha K");
+    assert.equal(map["Batch"], "DBHM-2026");
+    assert.equal(map["Date"], "2026-04-02");
+    assert.match(map["Amount"], /15,000/);
+  });
+
+  it("returns expense fields (category, description, account, amount); id can be numeric", () => {
+    const d = matchedRecordDetail({ match_kind: "expense", match_id: 7 }, data);
+    assert.equal(d.title, "Expense");
+    const map = Object.fromEntries(d.rows.map((r) => [r.k, r.v]));
+    assert.equal(map["Category"], "Rent");
+    assert.equal(map["Description"], "April rent");
+    assert.equal(map["Account"], "HDFC");
+    assert.match(map["Amount"], /30,000/);
+  });
+
+  it("returns transfer fields with a From → To summary", () => {
+    const d = matchedRecordDetail({ match_kind: "transfer", match_id: "t1" }, data);
+    assert.equal(d.title, "Transfer");
+    const map = Object.fromEntries(d.rows.map((r) => [r.k, r.v]));
+    assert.equal(map["From → To"], "Cash → ICICI");
+    assert.equal(map["Purpose"], "Cash deposit");
+  });
+
+  it("flags a deleted / missing record instead of throwing", () => {
+    const d = matchedRecordDetail({ match_kind: "collection", match_id: "gone" }, data, students);
+    assert.equal(d.title, "Fee collection");
+    assert.match(d.rows[0].v, /not found/);
+  });
+
+  it("returns null when the line has no match", () => {
+    assert.equal(matchedRecordDetail({ status: "unmatched" }, data), null);
+    assert.equal(matchedRecordDetail({ match_kind: "collection" }, data), null);
   });
 });
 

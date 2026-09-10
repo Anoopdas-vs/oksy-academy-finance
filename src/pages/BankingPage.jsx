@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Input, Modal, MetricCard } from "../components/ui.jsx";
 import { formatMoney } from "../lib/format.js";
 import StudentPicker from "../components/StudentPicker.jsx";
 import { SearchBox, Pager } from "../components/SearchPager.jsx";
 import { usePagedList } from "../lib/usePagedList.js";
 import { downloadTemplate } from "../lib/templates.js";
-import { reconciliationSummary } from "../lib/reconcile.js";
+import { reconciliationSummary, matchKindLabel, matchedRecordDetail } from "../lib/reconcile.js";
 import { outstanding } from "../lib/fees.js";
 
 const ACCOUNTS = ["HDFC", "ICICI", "Cash", "Healthcare"];
@@ -418,7 +419,7 @@ function ReconcileView({
                       <td className="desc-cell">{ln.description}</td>
                       <td className="amount-negative">{ln.withdrawal ? formatMoney(ln.withdrawal) : ""}</td>
                       <td className="amount-positive">{ln.deposit ? formatMoney(ln.deposit) : ""}</td>
-                      <td><StatusTag status={ln.status} kind={ln.match_kind} /></td>
+                      <td><StatusTag line={ln} data={data} students={students} /></td>
                       <td className="row-actions">
                         {isAdmin && ln.status === "unmatched" && (
                           <>
@@ -480,11 +481,61 @@ function ReconcileView({
   );
 }
 
-function StatusTag({ status, kind }) {
-  if (status === "matched") return <span className="mini-tag ok">Matched · {kind}</span>;
-  if (status === "classified") return <span className="mini-tag ok">Added · {kind}</span>;
+function StatusTag({ line, data, students }) {
+  const { status } = line;
+  const [tip, setTip] = useState(null); // { x, y, flip } | null
+
   if (status === "ignored") return <span className="mini-tag">Ignored</span>;
-  return <span className="mini-tag warn">Unmatched</span>;
+  if (status !== "matched" && status !== "classified") {
+    return <span className="mini-tag warn">Unmatched</span>;
+  }
+
+  const verb = status === "matched" ? "Matched" : "Added";
+  const kindLabel = matchKindLabel(line.match_kind);
+  const detail = matchedRecordDetail(line, data, students);
+
+  const show = (e) => {
+    if (!detail) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const flip = r.bottom > window.innerHeight - 200;
+    // Keep the ~320px card inside the viewport when the tag sits near an edge.
+    const x = Math.max(8, Math.min(r.left, window.innerWidth - 332));
+    setTip({ x, y: flip ? r.top : r.bottom, flip });
+  };
+  const hide = () => setTip(null);
+
+  return (
+    <span
+      className={`mini-tag ok${detail ? " match-tag" : ""}`}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+      tabIndex={detail ? 0 : undefined}
+    >
+      {verb} - {kindLabel}
+      {detail && tip &&
+        createPortal(
+          <span
+            className="match-tip"
+            style={{
+              left: tip.x,
+              top: tip.flip ? undefined : tip.y + 6,
+              bottom: tip.flip ? window.innerHeight - tip.y + 6 : undefined,
+            }}
+          >
+            <span className="match-tip-title">{detail.title}</span>
+            {detail.rows.map((row) => (
+              <span className="match-tip-row" key={row.k}>
+                <span className="match-tip-k">{row.k}</span>
+                <span className="match-tip-v">{row.v}</span>
+              </span>
+            ))}
+          </span>,
+          document.body
+        )}
+    </span>
+  );
 }
 
 function ClassifyModal({ line, students, data, busy, onClose, onSubmit }) {

@@ -1,6 +1,8 @@
 // Bank reconciliation helpers: book-balance math and auto-matching uploaded
 // statement lines against the app's own transactions.
 
+import { formatMoney } from "./format.js";
+
 const amt = (v) => Number(v || 0);
 const onOrBefore = (dateStr, cutoff) => !cutoff || String(dateStr).slice(0, 10) <= cutoff;
 
@@ -56,6 +58,81 @@ export function autoMatch(lines, account, data, dayWindow = 4) {
     }
     return { status: "unmatched" };
   });
+}
+
+// Human label for a match kind. "collection" reads as "fee collection".
+export const MATCH_KIND_LABEL = {
+  collection: "fee collection",
+  expense: "expense",
+  transfer: "transfer",
+};
+
+export function matchKindLabel(kind) {
+  return MATCH_KIND_LABEL[kind] || kind || "record";
+}
+
+// Resolve a matched/classified statement line to the underlying app record
+// and return the fields to show when the user hovers its status tag — so an
+// auto-match can be visually confirmed (or spotted as wrong and unmatched).
+//   -> { title, rows: [{ k, v }] }  |  null
+export function matchedRecordDetail(line, data = {}, students = []) {
+  const kind = line?.match_kind;
+  const id = line?.match_id;
+  if (!kind || id == null) return null;
+
+  const notFound = (title) => ({
+    title,
+    rows: [{ k: "Record", v: "not found — it may have been deleted" }],
+  });
+
+  if (kind === "collection") {
+    const c = (data.collections || []).find((r) => String(r.id) === String(id));
+    if (!c) return notFound("Fee collection");
+    const stu = (students || []).find((s) => s.id === c.student_id);
+    return {
+      title: "Fee collection",
+      rows: [
+        { k: "Date", v: c.date },
+        { k: "Student ID", v: c.student_id },
+        { k: "Student", v: c.student_name || stu?.name || "—" },
+        { k: "Batch", v: stu?.batch || "—" },
+        { k: "Type", v: c.type || "—" },
+        { k: "Amount", v: formatMoney(c.amount) },
+      ],
+    };
+  }
+
+  if (kind === "expense") {
+    const e = (data.expenses || []).find((r) => String(r.id) === String(id));
+    if (!e) return notFound("Expense");
+    return {
+      title: "Expense",
+      rows: [
+        { k: "Date", v: e.date },
+        { k: "Category", v: e.category || "—" },
+        { k: "Description", v: e.description || "—" },
+        { k: "Account", v: e.account || "—" },
+        { k: "Amount", v: formatMoney(e.amount) },
+      ],
+    };
+  }
+
+  if (kind === "transfer") {
+    const t = (data.transfers || []).find((r) => String(r.id) === String(id));
+    if (!t) return notFound("Transfer");
+    return {
+      title: "Transfer",
+      rows: [
+        { k: "Date", v: t.date },
+        { k: "From → To", v: `${t.from_account} → ${t.to_account}` },
+        { k: "Purpose", v: t.purpose || "—" },
+        { k: "Reference", v: t.reference || "—" },
+        { k: "Amount", v: formatMoney(t.amount) },
+      ],
+    };
+  }
+
+  return null;
 }
 
 export function reconciliationSummary(statement, lines, data) {

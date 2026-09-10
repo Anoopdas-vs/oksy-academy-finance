@@ -1,6 +1,8 @@
-# Oksy Academy Finance — Project Overview
+# Oksy Academy Portal — Project Overview
 
-Financial-consolidation app for Oksy Academy LLP. Live at **finance.oksyacademy.in**.
+All-in-one academy management system (LMS + ERP + finance) for Oksy Academy
+LLP. Live at **finance.oksyacademy.in** (transitioning to
+**portal.oksyacademy.in**).
 
 > **For anyone (or any AI tool) picking this up:** read this file first.
 > The database is **live on Supabase** and migrations are hand-run SQL in
@@ -20,7 +22,9 @@ Financial-consolidation app for Oksy Academy LLP. Live at **finance.oksyacademy.
 | Charts | recharts | ^3.10 |
 | Excel I/O | xlsx (SheetJS) | ^0.18 |
 | Backend SDK | @supabase/supabase-js | ^2.45 |
-| Language | JavaScript + JSX | **no TypeScript**, **no tests** |
+| Tests | `node --test` | `npm test` → `src/lib/*.test.js` (`fees.test.js`, `reconcile.test.js`) |
+| Language | JavaScript + JSX | **no TypeScript** |
+| Node | pinned | `engines.node >= 20.19` + `.nvmrc` |
 | Routing | none — tab state in `src/App.jsx` (`activeTab`) |
 | Styling | one hand-written `src/App.css` (~2700 lines), CSS variables |
 
@@ -28,7 +32,7 @@ Financial-consolidation app for Oksy Academy LLP. Live at **finance.oksyacademy.
 server-side function (`supabase/functions/create-user`). No Node/API server,
 no ORM.
 
-Scripts: `npm run dev` · `npm run build` · `npm run preview` · `npm run lint`.
+Scripts: `npm run dev` · `npm run build` · `npm run preview` · `npm run lint` · `npm test`.
 
 ---
 
@@ -36,12 +40,15 @@ Scripts: `npm run dev` · `npm run build` · `npm run preview` · `npm run lint`
 
 ```
 src/
-  App.jsx (~1400 loc)      all state, data handlers, totals math, nav, render
+  App.jsx (~1470 loc)      all state, data handlers, totals math, nav, render
   App.css (~2700 loc)      entire stylesheet
-  context/AuthContext.jsx  Supabase auth + profile load + getAccess
+  context/
+    AuthContext.jsx         AuthProvider — Supabase auth + profile load + getAccess
+    authContext.js          the React context object (split out for fast-refresh)
+    useAuth.js              the useAuth() hook
   components/
     Login.jsx              email/pw + Google OAuth + password reset
-    ui.jsx                  formatMoney, MetricCard, Input, Modal, StatusBadge…
+    ui.jsx                  MetricCard, Input, Modal, StatusBadge…
     SearchPager.jsx         SearchBox + Pager
     PeriodFilter.jsx        All time / This FY / This month / Custom range
     ImportPreviewModal.jsx  bulk-import review dialog
@@ -50,6 +57,11 @@ src/
     StaffAccess.jsx         approve users, set role + financial access
   pages/
     Dashboard.jsx           "Academy Pulse" home
+    TimetablePage.jsx       weekly class schedule
+    LiveClassPage.jsx       join / launch live classes (Jitsi)
+    AssignmentsPage.jsx     assignments + submissions + grading
+    ExamsPage.jsx           online MCQ exams + results
+    ReviewsPage.jsx         faculty / academic reviews
     EnrollmentPage.jsx      student master
     FeeCollectionPage.jsx   record / edit / delete fee payments
     ExpensesPage.jsx        record / edit / delete expenses
@@ -61,16 +73,19 @@ src/
     data.js (~330 loc)      ALL database reads/writes — the "API layer"
     access.js               roles, labels, per-role area permissions
     fees.js                 canonical fee + account-balance math
+    fees.test.js            node:test coverage for fees.js
     period.js               date-range resolution
     reconcile.js            auto-match statement lines ↔ transactions
-    bankStatement.js        parse uploaded bank-statement Excel
-    reports.js              report definitions + xlsx export
+    reconcile.test.js       node:test coverage for reconcile.js
+    bankStatement.js        parse uploaded bank-statement Excel (dynamic xlsx)
+    reports.js              report definitions + xlsx export (dynamic xlsx)
+    templates.js            xlsx template download (dynamic xlsx)
+    format.js               formatMoney and shared formatters
     validation.js           form validators + friendly error text
-    templates.js            xlsx template download
     usePagedList.js         client-side search + pagination hook
 supabase/
-  schema.sql               full DDL — run ONCE on a fresh project
-  migration-*.sql (×5)      incremental patches, run IN ORDER after schema.sql
+  schema.sql               full DDL incl. Academy Suite — run ONCE on a fresh project
+  migration-*.sql (×6)      incremental patches, run IN ORDER after schema.sql
   functions/create-user/    Deno Edge Function (admin-only user creation)
 ```
 
@@ -91,6 +106,15 @@ supabase/
 | **batches** | course batch master; drives enrolment auto-fill. |
 | **expense_categories** | editable category list used by the Expenses form. |
 | **app_settings** | singleton JSON row; holds `roleAreas` (super-admin's per-role tab permissions). |
+| **timetables** | weekly schedule master (day, time, subject, batch, faculty, room, link). |
+| **assignments** / **assignment_submissions** | assignment master + per-student submissions, marks, feedback. |
+| **exams** / **exam_questions** / **exam_results** | MCQ exam master, question bank (`options` jsonb + `correct_index`), per-student results. |
+| **faculty_reviews** | student-submitted faculty ratings (rating / clarity / punctuality 1–5 + comment). |
+
+Academy Suite tables (`timetables` … `faculty_reviews`) are defined in
+`supabase/schema.sql` **and** `supabase/migration-academy-suite.sql`. RLS:
+approved users read; `is_admin()` manages; students own their submissions /
+results / reviews.
 
 SQL helpers: `is_admin()` (admin + super_admin), `is_super_admin()`,
 `is_approved_user()`, `can_view_financials()`.
@@ -117,7 +141,12 @@ No REST/GraphQL of its own.
 | Module | Summary |
 |---|---|
 | **Auth** | Email+password, Google OAuth, forgot password. New users wait for a super-admin to approve. |
-| **Academy Pulse (Dashboard)** | Student overview tiles (with month deltas), Financial overview (Revenue / Expense / Net P&L / Outstanding fees / Due to Healthcare), Cash & Bank position, Fee Collection Health donut, Monthly Income-vs-Expense bar chart, Batch Summary with %-collected bars, Recent Collections & Expenses. Global period filter (flows are period-scoped; balances are all-time). Trimmed view for non-financial roles. |
+| **Academy Pulse (Dashboard)** | Student overview tiles (with month deltas), Financial overview (Revenue / Expense / Net P&L / Outstanding fees / Due to Healthcare), Cash & Bank position, Fee Collection Health donut, Monthly Income-vs-Expense bar chart, Batch Summary with %-collected bars, Recent Collections & Expenses. Global period filter (flows are period-scoped; balances are all-time). Trimmed / role-tailored view for faculty & student roles. |
+| **Timetable** | Weekly class grid by day/batch; admins add/edit slots, everyone else reads. |
+| **Live Class** | Launch / join scheduled live sessions (Jitsi links). |
+| **Assignments** | Assignment list per batch; students submit a link + notes; admins/faculty grade with marks + feedback. |
+| **Exams** | Timed MCQ engine — take exam, auto-score against `correct_index`, pass/fail vs `passing_score`, results history. |
+| **Reviews** | Students rate faculty (overall / clarity / punctuality) with a comment; aggregated view. |
 | **Enrollment** | Student master; add/edit modal; batch picker auto-fills course + fee; Excel template + bulk import with preview. |
 | **Fee Collection** | Record payment (type-ahead student, shows outstanding) → prints a Receipt; payment history with edit/delete (admin); Excel template + bulk import. |
 | **Expenses** | Record expense (category from editable list); edit/delete (admin); Excel template + bulk import. |
@@ -142,16 +171,15 @@ Elsewhere (not in the repo):
 
 ## 7. Deployment
 
-- **Frontend** → Vercel (project already linked via `.vercel/`, Vite
-  auto-detected, no `vercel.json`). Currently manual `vercel --prod`.
-  Recommended: connect the GitHub repo in the Vercel dashboard for
-  auto-deploy on push.
+- **Frontend** → Vercel, **connected to the GitHub repo** (`main` →
+  auto-deploy; Vite auto-detected, no `vercel.json`). `VITE_SUPABASE_URL`
+  and `VITE_SUPABASE_ANON_KEY` are set in Vercel for all environments.
 - **Edge function** → deployed manually via the Supabase dashboard or
   `supabase functions deploy create-user`.
 - **DB** → paste `supabase/schema.sql` then each `supabase/migration-*.sql`
   (in filename order) into the Supabase SQL editor.
 
-No Dockerfile, no CI, no `supabase/config.toml` / CLI migrations folder.
+No Dockerfile, no CI yet, no `supabase/config.toml` / CLI migrations folder.
 
 ---
 
@@ -160,22 +188,28 @@ No Dockerfile, no CI, no `supabase/config.toml` / CLI migrations folder.
 **Infra**
 - Migrations are hand-run ad-hoc SQL with no version table — the live DB has
   drifted through partial re-runs. Consider adopting Supabase CLI migrations.
-- Node version not pinned (`engines` / `.nvmrc` missing) though Vite 8 needs 20.19+.
+- No CI — lint / test / build are run by hand (and by AI agents) before push.
 
 **Code**
-- `src/App.jsx` (~1400 loc) holds everything — state, handlers, `totals`
+- `src/App.jsx` (~1470 loc) holds everything — state, handlers, `totals`
   math, nav, render. Split before large feature work.
 - `src/App.css` is one ~2700-line file.
-- No TypeScript, no tests, no error boundary — in a money app.
-- Outstanding lint warnings: `only-export-components`, `set-state-in-effect`.
+- No TypeScript and no error boundary — in a money app. Tests cover
+  `fees.js` + `reconcile.js` only (`npm test`); pages/components untested.
+- `xlsx` and `recharts` are the two heavy deps. `xlsx` is loaded via dynamic
+  `import()` in `bankStatement.js`, `reports.js`, `templates.js` and
+  `App.jsx` — keep it that way (no static `import ... "xlsx"`).
 
 **Functional**
 - `income` table is dead — remove or repurpose.
 - **Net P&L** = `Revenue − Expense − Due to Healthcare`, but `Total Expense`
   already includes Healthcare-paid expenses, so those costs are subtracted
   twice. Confirm the intended definition.
-- Roles `student` / `faculty` / `professional` exist but have no permissions,
-  no dedicated screens, and default to a "no sections enabled" lock screen.
+- Roles `student` / `faculty` / `professional` default (via
+  `DEFAULT_ROLE_AREAS` in `access.js`) to the Academy Suite tabs
+  (Pulse + Timetable / Live Class / Assignments / Exams / Reviews) with a
+  role-tailored dashboard; a user with **no** areas enabled still hits the
+  lock screen.
 - `collections_basic` masked view may be largely moot under the current role
   model.
 - Reconciliation auto-match is a date(±4d)+amount heuristic; the bank-statement

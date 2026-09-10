@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import { inRange } from "./period.js";
 import { grossFee, effectiveFeeDue, outstanding } from "./fees.js";
 
@@ -269,11 +268,18 @@ function fmt(n) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n || 0);
 }
 
-export function exportReportToXlsx(fileName, columns, rows) {
-  const header = columns.map((c) => c.label);
-  const body = rows.map((r) => columns.map((c) => (r[c.key] === null || r[c.key] === undefined ? "" : r[c.key])));
-  const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Report");
-  XLSX.writeFile(wb, fileName);
+// `xlsx` (~140 kB gzipped) is loaded on demand — only when the user clicks
+// "Download Excel" — so it stays out of the initial app bundle.
+export async function exportReportToXlsx(fileName, columns, rows) {
+  try {
+    const XLSX = await import("xlsx");
+    const header = columns.map((c) => c.label);
+    const body = rows.map((r) => columns.map((c) => (r[c.key] === null || r[c.key] === undefined ? "" : r[c.key])));
+    const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    XLSX.writeFile(wb, fileName);
+  } catch (err) {
+    alert(`Could not build the Excel file: ${err?.message || err}`);
+  }
 }

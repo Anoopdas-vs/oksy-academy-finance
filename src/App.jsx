@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
 import { useAuth } from "./context/useAuth.js";
@@ -246,6 +246,9 @@ function AppShell() {
   const [transfers, setTransfers] = useState([]);
   const [bankStatements, setBankStatements] = useState([]);
   const [bankLines, setBankLines] = useState([]);
+  // Bank statements + lines are only used on the Banking tab, so they are
+  // loaded the first time that tab is opened rather than on every app load.
+  const bankLoadedRef = useRef(false);
   const [batches, setBatches] = useState([]);
   const [expenseCategories, setExpenseCategories] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
@@ -347,18 +350,9 @@ function AppShell() {
       setAppSettings(settings || {});
 
       if (access.financials) {
-        const [transferRows, statementRows, lineRows] = await Promise.all([
-          fetchTransfers(),
-          fetchBankStatements(),
-          fetchBankStatementLines(),
-        ]);
-        setTransfers(transferRows);
-        setBankStatements(statementRows);
-        setBankLines(lineRows);
+        setTransfers(await fetchTransfers());
       } else {
         setTransfers([]);
-        setBankStatements([]);
-        setBankLines([]);
       }
       setDataError("");
     } catch (err) {
@@ -368,10 +362,47 @@ function AppShell() {
     }
   };
 
+  // Fetch bank statements + their lines. Called the first time the Banking
+  // tab is opened, and after every reconciliation mutation. Kept separate
+  // from loadData() so Dashboard / Fee Collection loads don't pay for it.
+  const loadBankData = async () => {
+    if (!access.financials) {
+      setBankStatements([]);
+      setBankLines([]);
+      bankLoadedRef.current = true;
+      return;
+    }
+    try {
+      const [statementRows, lineRows] = await Promise.all([
+        fetchBankStatements(),
+        fetchBankStatementLines(),
+      ]);
+      setBankStatements(statementRows);
+      setBankLines(lineRows);
+      bankLoadedRef.current = true;
+    } catch (err) {
+      setDataError(friendlyError(err));
+    }
+  };
+
   useEffect(() => {
     loadData();
+    // A role / financial-access change invalidates any bank data already
+    // loaded. Re-arm the lazy load, and if the user is sitting on the
+    // Banking tab right now, refetch immediately.
+    bankLoadedRef.current = false;
+    setBankStatements([]);
+    setBankLines([]);
+    if (activeTab === "Banking") loadBankData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canViewFinancials, access.role]);
+
+  useEffect(() => {
+    if (activeTab === "Banking" && !bankLoadedRef.current) {
+      loadBankData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   // Resolved { start, end } for the active period, or null for all-time.
   const range = useMemo(() => resolvePeriod(period), [period]);
@@ -759,7 +790,7 @@ function AppShell() {
         lineRows,
         profile.id
       );
-      await loadData();
+      await Promise.all([loadData(), loadBankData()]);
     } catch (err) {
       setDataError(friendlyError(err));
     } finally {
@@ -785,7 +816,7 @@ function AppShell() {
           matched_at: new Date().toISOString(),
           matched_by: profile.id,
         });
-        await loadData();
+        await Promise.all([loadData(), loadBankData()]);
         return;
       }
 
@@ -847,7 +878,7 @@ function AppShell() {
         matched_at: new Date().toISOString(),
         matched_by: profile.id,
       });
-      await loadData();
+      await Promise.all([loadData(), loadBankData()]);
     } catch (err) {
       setDataError(friendlyError(err));
       throw err;
@@ -864,7 +895,7 @@ function AppShell() {
         match_kind: null,
         match_id: null,
       });
-      await loadData();
+      await Promise.all([loadData(), loadBankData()]);
     } catch (err) {
       setDataError(friendlyError(err));
     } finally {
@@ -890,7 +921,7 @@ function AppShell() {
         matched_at: null,
         matched_by: null,
       });
-      await loadData();
+      await Promise.all([loadData(), loadBankData()]);
     } catch (err) {
       setDataError(friendlyError(err));
     } finally {
@@ -902,7 +933,7 @@ function AppShell() {
     setBankBusy(true);
     try {
       await deleteBankStatement(id);
-      await loadData();
+      await Promise.all([loadData(), loadBankData()]);
     } catch (err) {
       setDataError(friendlyError(err));
     } finally {

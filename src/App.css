@@ -826,6 +826,54 @@ tbody tr:hover {
   color: white;
 }
 
+/* Reconciliation: hover a matched status tag to see the linked transaction. */
+.match-tag {
+  cursor: help;
+}
+
+.match-tip {
+  position: fixed;
+  z-index: 3000;
+  min-width: 230px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(20, 22, 40, 0.18);
+  font-size: 11px;
+  color: var(--text);
+  pointer-events: none;
+}
+
+.match-tip-title {
+  font-weight: 700;
+  font-size: 11px;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.match-tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  line-height: 1.5;
+}
+
+.match-tip-k {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.match-tip-v {
+  font-weight: 600;
+  text-align: right;
+}
+
 tfoot td {
   background: var(--purple-pale);
   border-top: 2px solid var(--border);
