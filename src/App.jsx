@@ -5,6 +5,7 @@ import { useAuth } from "./context/useAuth.js";
 import Login from "./components/Login.jsx";
 import ImportPreviewModal from "./components/ImportPreviewModal.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
+import NotificationBell from "./components/NotificationBell.jsx";
 import { today } from "./lib/format.js";
 import PeriodFilter from "./components/PeriodFilter.jsx";
 import { resolvePeriod, inRange, periodLabel } from "./lib/period.js";
@@ -71,11 +72,13 @@ import ExpensesPage from "./pages/ExpensesPage.jsx";
 import BankingPage from "./pages/BankingPage.jsx";
 import ReportsPage from "./pages/ReportsPage.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
-import TimetablePage from "./pages/TimetablePage.jsx";
-import LiveClassPage from "./pages/LiveClassPage.jsx";
-import AssignmentsPage from "./pages/AssignmentsPage.jsx";
-import ExamsPage from "./pages/ExamsPage.jsx";
-import ReviewsPage from "./pages/ReviewsPage.jsx";
+// Academy Suite pages are code-split — they're never the landing tab and
+// pull their own data layer.
+const TimetablePage = React.lazy(() => import("./pages/TimetablePage.jsx"));
+const LiveClassPage = React.lazy(() => import("./pages/LiveClassPage.jsx"));
+const AssignmentsPage = React.lazy(() => import("./pages/AssignmentsPage.jsx"));
+const ExamsPage = React.lazy(() => import("./pages/ExamsPage.jsx"));
+const ReviewsPage = React.lazy(() => import("./pages/ReviewsPage.jsx"));
 import Receipt from "./components/Receipt.jsx";
 
 const HOME = "Pulse"; // dashboard tab name
@@ -259,7 +262,6 @@ function AppShell() {
 
   // Fee receipt to show/print after a collection is recorded.
   const [receipt, setReceipt] = useState(null);
-  const [liveClassInfo, setLiveClassInfo] = useState(null);
 
   // Global top-bar period filter: { preset, start, end }. Drives the money
   // views (Dashboard financials + chart, Fee Collection & Expenses lists).
@@ -1293,6 +1295,7 @@ function AppShell() {
           </div>
           <div className="topbar-right">
             <PeriodFilter period={period} onChange={setPeriod} />
+            <NotificationBell onNavigate={(tab) => access.canOpen(tab) && setActiveTab(tab)} />
             <div className="top-user">
               <span className="top-user-avatar">
                 {(profile.full_name || profile.email || "?").charAt(0).toUpperCase()}
@@ -1306,6 +1309,7 @@ function AppShell() {
         {dataError && <div className="auth-message error page-error">{dataError}</div>}
 
         <ErrorBoundary key={activeTab}>
+        <React.Suspense fallback={<div className="auth-message page-error">Loading…</div>}>
 
         {nav.length === 0 && (
           <div className="page">
@@ -1340,42 +1344,24 @@ function AppShell() {
 
         {activeTab === "Timetable" && (
           <TimetablePage
-            isAdmin={isAdmin}
-            role={access.role}
+            access={access}
             batches={batches}
-            onNavigateToClass={(subject, link) => {
-              setLiveClassInfo({ subject, link });
-              setActiveTab("Live Class");
-            }}
+            onOpenLiveClass={() => setActiveTab("Live Class")}
           />
         )}
 
-        {activeTab === "Live Class" && (
-          <LiveClassPage
-            initialRoom={liveClassInfo?.link}
-            initialTitle={liveClassInfo?.subject}
-          />
-        )}
+        {activeTab === "Live Class" && <LiveClassPage access={access} />}
 
         {activeTab === "Assignments" && (
-          <AssignmentsPage
-            isAdmin={isAdmin}
-            role={access.role}
-            batches={batches}
-          />
+          <AssignmentsPage access={access} profile={profile} batches={batches} />
         )}
 
         {activeTab === "Exams" && (
-          <ExamsPage
-            isAdmin={isAdmin}
-            role={access.role}
-          />
+          <ExamsPage access={access} profile={profile} batches={batches} />
         )}
 
         {activeTab === "Reviews" && (
-          <ReviewsPage
-            profile={profile}
-          />
+          <ReviewsPage access={access} profile={profile} />
         )}
 
         {activeTab === "Enrollment" && (
@@ -1483,6 +1469,7 @@ function AppShell() {
           />
         )}
 
+        </React.Suspense>
         </ErrorBoundary>
       </main>
 

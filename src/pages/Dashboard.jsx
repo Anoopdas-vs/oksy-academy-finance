@@ -540,698 +540,155 @@ function buildMonthlySeries(collections, expenses) {
     pnl: r.revenue - r.expense,
   }));
 }
+/* ------------------- Academy Suite dashboards ------------------- */
 
-/* --------------------- Faculty Academic Workspace --------------------- */
+function useSuiteSnapshot(profile, role) {
+  const [state, setState] = React.useState({ loading: true, pending: false, slots: [], assignments: [], subs: [], exams: [], attempts: [] });
+  React.useEffect(() => {
+    let live = true;
+    (async () => {
+      const mod = await import("../lib/academy.js");
+      const [tt, asg, exs] = await Promise.all([mod.fetchTimetable(), mod.fetchAssignments(), mod.fetchExams()]);
+      if (!live) return;
+      if (tt.error?.suitePending || asg.error?.suitePending || exs.error?.suitePending) {
+        setState((s) => ({ ...s, loading: false, pending: true }));
+        return;
+      }
+      const [{ rows: subs }, { rows: attempts }] = await Promise.all([
+        mod.fetchSubmissions(asg.rows.map((a) => a.id)),
+        role === "faculty" ? Promise.resolve({ rows: [] }) : mod.fetchMyExamAttempts(profile?.id),
+      ]);
+      if (!live) return;
+      setState({ loading: false, pending: false, slots: tt.rows, assignments: asg.rows, subs, exams: exs.rows, attempts });
+    })();
+    return () => { live = false; };
+  }, [profile?.id, role]);
+  return state;
+}
+
+const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function SuitePendingCard() {
+  return (
+    <div className="dashboard-content">
+      <div className="empty-state">
+        <div className="empty-icon">🎓</div>
+        <h3>Academy Suite setup pending</h3>
+        <p>Run <code>supabase/migration-academy-suite-v2.sql</code> in Supabase, then set your batch on your profile.</p>
+      </div>
+    </div>
+  );
+}
 
 function FacultyDashboard({ profile, onNavigate }) {
   const go = (tab) => () => onNavigate(tab);
-  const facultyName = profile?.full_name || "Faculty Member";
+  const snap = useSuiteSnapshot(profile, "faculty");
+  const today = DOW[new Date().getDay()];
+  const todayClasses = snap.slots.filter((s) => s.day_of_week === today && s.status !== "cancelled");
+  const toGrade = snap.subs.filter((s) => s.status === "submitted");
+  const drafts = snap.assignments.filter((a) => a.status === "draft").length;
 
-  const todayClasses = [
-    {
-      id: "cls_1",
-      time: "09:30 AM - 11:00 AM",
-      subject: "Full-Stack Web Development",
-      batch: "FSW-2026-A",
-      room: "Virtual Room 101",
-    },
-    {
-      id: "cls_2",
-      time: "02:00 PM - 03:30 PM",
-      subject: "Database Systems & Supabase",
-      batch: "FSW-2026-A",
-      room: "Virtual Room 102",
-    },
-  ];
-
-  const syllabusProgress = [
-    {
-      course: "Full-Stack Web Development",
-      progress: 80,
-      currentTopic: "Vite Bundle Splitting & State Architecture",
-      nextTopic: "Capstones & Full-Stack Deployment",
-      completedModules: 8,
-      totalModules: 10,
-    },
-    {
-      course: "Database Architecture & SQL",
-      progress: 65,
-      currentTopic: "Row Level Security (RLS) & Triggers",
-      nextTopic: "Advanced Indexing & Views",
-      completedModules: 6,
-      totalModules: 10,
-    },
-    {
-      course: "Financial Accounting & Business Controls",
-      progress: 85,
-      currentTopic: "Inter-company Settlement & Bank Reconciliation",
-      nextTopic: "Financial Reporting Compliance",
-      completedModules: 9,
-      totalModules: 11,
-    },
-  ];
-
-  const pendingSubmissions = [
-    {
-      id: "sub_1",
-      student: "Rahul Menon",
-      project: "React Full-Stack Financial Dashboard",
-      batch: "FSW-2026-A",
-      date: "2026-09-08",
-    },
-    {
-      id: "sub_2",
-      student: "Sneha George",
-      project: "React Full-Stack Financial Dashboard",
-      batch: "FSW-2026-A",
-      date: "2026-09-09",
-    },
-    {
-      id: "sub_3",
-      student: "Devika S.",
-      project: "E-Commerce Database Schema Design",
-      batch: "FSW-2026-A",
-      date: "2026-09-09",
-    },
-  ];
-
-  const facultyReviews = [
-    {
-      student: "Devika S.",
-      rating: 5,
-      comment: "The practical coding sessions and live debugging exercises made complex React concepts very clear.",
-      date: "2026-09-07",
-    },
-    {
-      student: "Rahul Menon",
-      rating: 4.8,
-      comment: "Great hands-on coverage of database schemas, RLS policies, and real-time triggers.",
-      date: "2026-09-05",
-    },
-  ];
+  if (snap.pending) return <SuitePendingCard />;
 
   return (
     <div className="dashboard-content">
-      <div
-        className="table-card"
-        style={{
-          padding: "1.5rem",
-          marginBottom: "1.5rem",
-          background: "linear-gradient(135deg, #312e81 0%, #4338ca 100%)",
-          color: "#ffffff",
-          borderRadius: "14px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-          <div>
-            <div
-              style={{
-                display: "inline-block",
-                background: "rgba(255,255,255,0.18)",
-                padding: "0.25rem 0.75rem",
-                borderRadius: "9999px",
-                fontSize: "0.8rem",
-                fontWeight: "600",
-                marginBottom: "0.5rem",
-              }}
-            >
-              👨‍🏫 Faculty Academic Workspace
-            </div>
-            <h2 style={{ margin: "0 0 0.25rem 0", fontSize: "1.6rem", color: "#ffffff" }}>
-              Welcome, {facultyName}
-            </h2>
-            <p style={{ margin: 0, opacity: 0.85, fontSize: "0.95rem" }}>
-              Here is your teaching schedule, syllabus progress, and student project submissions for today.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "0.6rem" }}>
-            <button
-              className="button"
-              style={{ background: "#ffffff", color: "#4338ca", fontWeight: "600" }}
-              onClick={go("Live Class")}
-            >
-              🎥 Start Live Classroom
-            </button>
-            <button
-              className="button"
-              style={{ background: "rgba(255,255,255,0.2)", color: "#ffffff", border: "1px solid rgba(255,255,255,0.4)" }}
-              onClick={go("Assignments")}
-            >
-              📋 Review Submissions
-            </button>
-          </div>
-        </div>
-      </div>
-
       <div className="dash-row four">
-        <StatTile label="Today's Classes" value={todayClasses.length} icon="📅" accent="blue" caption="Live interactive lectures" />
-        <StatTile label="Active Batches" value="2" icon="👥" accent="violet" caption="FSW-2026-A, BCOM-2026" />
-        <StatTile label="Submissions to Grade" value={pendingSubmissions.length} icon="📝" accent="amber" valueTone="warn" caption="Projects awaiting review" />
-        <StatTile label="Faculty Rating" value="4.9 ★" icon="⭐" accent="green" valueTone="pos" caption="Based on verified student reviews" />
+        <StatTile label="Today's classes" value={todayClasses.length} icon="📅" accent="blue" onClick={go("Timetable")} />
+        <StatTile label="Submissions to grade" value={toGrade.length} icon="📝" accent="amber" valueTone={toGrade.length ? "warn" : undefined} onClick={go("Assignments")} />
+        <StatTile label="Assignments" value={snap.assignments.length} icon="📋" accent="violet" caption={drafts ? drafts + " draft" : "all published"} onClick={go("Assignments")} />
+        <StatTile label="Exams" value={snap.exams.length} icon="🧪" accent="green" onClick={go("Exams")} />
       </div>
 
       <div className="dash-row two-50-50" style={{ marginTop: "1rem" }}>
-        <SectionCard
-          icon="📅"
-          accent="blue"
-          title="Today's Teaching Schedule"
-          subtitle="Lecture timings, batches and 1-click room launcher"
-          action={{ label: "View Full Timetable", onClick: go("Timetable") }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-            {todayClasses.map((cls) => (
-              <div
-                key={cls.id}
-                style={{
-                  border: "1px solid var(--border, #e2e8f0)",
-                  borderRadius: "10px",
-                  padding: "1rem",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  background: "var(--surface, #ffffff)",
-                }}
-              >
-                <div>
-                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.3rem" }}>
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        padding: "0.15rem 0.5rem",
-                        background: "var(--accent-light, #eff6ff)",
-                        color: "var(--accent, #2563eb)",
-                        borderRadius: "4px",
-                        fontWeight: "600",
-                      }}
-                    >
-                      {cls.time}
-                    </span>
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted, #64748b)" }}>
-                      {cls.batch} · {cls.room}
-                    </span>
-                  </div>
-                  <strong style={{ fontSize: "1rem" }}>{cls.subject}</strong>
-                </div>
-                <button
-                  className="button primary small"
-                  onClick={go("Live Class")}
-                >
-                  🎥 Launch Room
-                </button>
-              </div>
-            ))}
-          </div>
+        <SectionCard icon="📅" accent="blue" title={"Today · " + today} subtitle="Your classes" action={{ label: "Timetable", onClick: go("Timetable") }}>
+          {todayClasses.length === 0 ? <p className="table-sub">No classes today.</p> : (
+            <table><tbody>
+              {todayClasses.map((s) => (
+                <tr key={s.id}><td>{(s.starts_at || "").slice(0, 5)}</td><td><strong>{s.subject}</strong></td><td><span className="mini-tag">{s.batch_name}</span></td></tr>
+              ))}
+            </tbody></table>
+          )}
         </SectionCard>
+        <SectionCard icon="📝" accent="amber" title="Awaiting your review" subtitle="Ungraded submissions" action={{ label: "Open", onClick: go("Assignments") }}>
+          {toGrade.length === 0 ? <p className="table-sub">Nothing pending.</p> : (
+            <table><tbody>
+              {toGrade.slice(0, 8).map((s) => {
+                const a = snap.assignments.find((x) => x.id === s.assignment_id);
+                return <tr key={s.id}><td>{a?.title || "—"}</td><td className="table-sub">{(s.submitted_at || "").slice(0, 10)}</td></tr>;
+              })}
+            </tbody></table>
+          )}
+        </SectionCard>
+      </div>
+    </div>
+  );
+}
 
-        <SectionCard
-          icon="📋"
-          accent="amber"
-          title="Student Submissions to Grade"
-          subtitle="Recent practical deliverables submitted by students"
-          action={{ label: "View All Projects", onClick: go("Assignments") }}
-        >
-          <table className="tight">
-            <thead>
-              <tr><th>Student</th><th>Project Brief</th><th>Submitted</th><th></th></tr>
-            </thead>
-            <tbody>
-              {pendingSubmissions.map((sub) => (
-                <tr key={sub.id}>
-                  <td><strong>{sub.student}</strong><br /><small style={{ color: "var(--text-muted)" }}>{sub.batch}</small></td>
-                  <td>{sub.project}</td>
-                  <td>{sub.date}</td>
-                  <td className="ra">
-                    <button className="button secondary small" onClick={go("Assignments")}>
-                      ✍ Grade
-                    </button>
-                  </td>
+function LearnerDashboard({ profile, onNavigate, role }) {
+  const go = (tab) => () => onNavigate(tab);
+  const snap = useSuiteSnapshot(profile, role);
+  const today = DOW[new Date().getDay()];
+  const hasBatch = !!profile?.batch_name;
+  const todayClasses = snap.slots.filter((s) => s.day_of_week === today && s.status !== "cancelled");
+  const pendingAsg = snap.assignments.filter(
+    (a) => a.status === "published" && !snap.subs.some((s) => s.assignment_id === a.id && s.student_id === profile?.id)
+  );
+  const openExams = snap.exams.filter(
+    (e) => e.status === "published" && !snap.attempts.some((t) => t.exam_id === e.id && t.submitted_at)
+  );
+  const results = snap.attempts.filter((t) => t.submitted_at);
+
+  if (snap.pending) return <SuitePendingCard />;
+
+  return (
+    <div className="dashboard-content">
+      {!hasBatch && (
+        <div className="auth-message error" style={{ marginBottom: "1rem" }}>
+          Your account isn't linked to a batch yet — ask an admin to set it so your classes and assignments show up.
+        </div>
+      )}
+      <div className="dash-row four">
+        <StatTile label="Today's classes" value={todayClasses.length} icon="📅" accent="blue" onClick={go("Timetable")} />
+        <StatTile label="Pending assignments" value={pendingAsg.length} icon="📋" accent="amber" valueTone={pendingAsg.length ? "warn" : undefined} onClick={go("Assignments")} />
+        <StatTile label="Open exams" value={openExams.length} icon="📝" accent="violet" onClick={go("Exams")} />
+        <StatTile label="Results" value={results.length} icon="🎯" accent="green" onClick={go("Exams")} />
+      </div>
+
+      <div className="dash-row two-50-50" style={{ marginTop: "1rem" }}>
+        <SectionCard icon="📅" accent="blue" title={"Today · " + today} subtitle="Your classes" action={{ label: "Timetable", onClick: go("Timetable") }}>
+          {todayClasses.length === 0 ? <p className="table-sub">No classes today.</p> : (
+            <table><tbody>
+              {todayClasses.map((s) => (
+                <tr key={s.id}>
+                  <td>{(s.starts_at || "").slice(0, 5)}</td>
+                  <td><strong>{s.subject}</strong></td>
+                  <td>{s.mode === "live" && s.join_link ? <button className="button secondary small" onClick={go("Live Class")}>Join</button> : null}</td>
                 </tr>
               ))}
-            </tbody>
-          </table>
+            </tbody></table>
+          )}
         </SectionCard>
-      </div>
-
-      <div className="dash-row two-50-50" style={{ marginTop: "1rem" }}>
-        <SectionCard
-          icon="📚"
-          accent="green"
-          title="Course Details & Syllabus Progress"
-          subtitle="Curriculum completion tracker across assigned subjects"
-          action={{ label: "Manage Batches", onClick: go("Admin") }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {syllabusProgress.map((syl, i) => (
-              <div key={i} style={{ borderBottom: i < syllabusProgress.length - 1 ? "1px solid var(--border, #e2e8f0)" : "none", paddingBottom: "0.75rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.3rem" }}>
-                  <strong>{syl.course}</strong>
-                  <span style={{ fontSize: "0.85rem", fontWeight: "600", color: syl.progress >= 80 ? "#10b981" : "#2563eb" }}>
-                    {syl.progress}% ({syl.completedModules}/{syl.totalModules} modules)
-                  </span>
-                </div>
-                <div style={{ height: "6px", background: "var(--border, #e2e8f0)", borderRadius: "3px", overflow: "hidden", marginBottom: "0.4rem" }}>
-                  <div style={{ height: "100%", width: `${syl.progress}%`, background: syl.progress >= 80 ? "#10b981" : "var(--accent, #2563eb)", borderRadius: "3px" }} />
-                </div>
-                <div style={{ fontSize: "0.8rem", color: "var(--text-muted, #64748b)" }}>
-                  Current: <em>{syl.currentTopic}</em> · Next: <em>{syl.nextTopic}</em>
-                </div>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          icon="⭐"
-          title="Recent Student Feedback"
-          subtitle="360° student course ratings and suggestions"
-          action={{ label: "All Reviews", onClick: go("Reviews") }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-            {facultyReviews.map((rev, i) => (
-              <div key={i} style={{ padding: "0.75rem", background: "var(--accent-light, #f8fafc)", borderRadius: "8px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.25rem" }}>
-                  <strong>{rev.student}</strong>
-                  <span style={{ color: "#d97706", fontWeight: "600" }}>{"★".repeat(Math.round(rev.rating))} {rev.rating}</span>
-                </div>
-                <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "var(--text-muted, #475569)" }}>
-                  "{rev.comment}"
-                </p>
-                <small style={{ fontSize: "0.75rem", color: "var(--text-muted, #94a3b8)" }}>{rev.date}</small>
-              </div>
-            ))}
-          </div>
+        <SectionCard icon="📋" accent="amber" title="To do" subtitle="Assignments & exams" action={{ label: "Assignments", onClick: go("Assignments") }}>
+          {pendingAsg.length === 0 && openExams.length === 0 ? <p className="table-sub">You're all caught up.</p> : (
+            <table><tbody>
+              {pendingAsg.slice(0, 6).map((a) => (
+                <tr key={a.id}><td>📋 {a.title}</td><td className="table-sub">{a.due_date ? "due " + a.due_date : ""}</td></tr>
+              ))}
+              {openExams.slice(0, 4).map((e) => (
+                <tr key={e.id}><td>📝 {e.title}</td><td className="table-sub">{e.duration_minutes} min</td></tr>
+              ))}
+            </tbody></table>
+          )}
         </SectionCard>
       </div>
     </div>
   );
 }
-
-/* ---------------------- Student Learning Portal ---------------------- */
 
 function StudentDashboard({ profile, onNavigate }) {
-  const go = (tab) => () => onNavigate(tab);
-  const studentName = profile?.full_name || "Student";
-
-  const todayClasses = [
-    {
-      id: "cls_1",
-      time: "09:30 AM - 11:00 AM",
-      subject: "Full-Stack Web Development",
-      faculty: "Prof. Arvind Kumar",
-      room: "Virtual Room 101",
-    },
-    {
-      id: "cls_2",
-      time: "02:00 PM - 03:30 PM",
-      subject: "Database Systems & Supabase",
-      faculty: "Dr. Meera Nair",
-      room: "Virtual Room 102",
-    },
-  ];
-
-  const studentCourses = [
-    {
-      title: "Full-Stack Web Development (FSW)",
-      progress: 78,
-      completedModules: 7,
-      totalModules: 9,
-      currentTopic: "Vite Bundle Splitting & Code Optimization",
-    },
-    {
-      title: "Relational Database Design & Supabase",
-      progress: 65,
-      completedModules: 5,
-      totalModules: 8,
-      currentTopic: "Row Level Security Policies & Auth Integration",
-    },
-  ];
-
-  const myAssignments = [
-    {
-      title: "React Full-Stack Financial Dashboard",
-      due: "2026-09-22",
-      status: "Graded",
-      marks: "92 / 100",
-      feedback: "Excellent architecture and clean code separation!",
-    },
-    {
-      title: "E-Commerce Database Schema Design",
-      due: "2026-09-18",
-      status: "Pending",
-      marks: "—",
-      feedback: "Submit normalization schema and foreign key constraints.",
-    },
-  ];
-
-  const myExams = [
-    {
-      title: "Full-Stack Web & React Fundamentals",
-      score: "75%",
-      passed: true,
-      status: "Completed",
-    },
-    {
-      title: "Financial Accounting & Ratio Analysis",
-      score: "Available",
-      passed: null,
-      status: "Available to Take",
-    },
-  ];
-
-  return (
-    <div className="dashboard-content">
-      <div
-        className="table-card"
-        style={{
-          padding: "1.5rem",
-          marginBottom: "1.5rem",
-          background: "linear-gradient(135deg, #065f46 0%, #047857 100%)",
-          color: "#ffffff",
-          borderRadius: "14px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-          <div>
-            <div
-              style={{
-                display: "inline-block",
-                background: "rgba(255,255,255,0.2)",
-                padding: "0.25rem 0.75rem",
-                borderRadius: "9999px",
-                fontSize: "0.8rem",
-                fontWeight: "600",
-                marginBottom: "0.5rem",
-              }}
-            >
-              🎓 Student Learning Portal
-            </div>
-            <h2 style={{ margin: "0 0 0.25rem 0", fontSize: "1.6rem", color: "#ffffff" }}>
-              Welcome, {studentName}
-            </h2>
-            <p style={{ margin: 0, opacity: 0.9, fontSize: "0.95rem" }}>
-              Enrolled Batch: <strong>FSW-2026-A</strong> · Track your classes, practical coursework, and quiz evaluations.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "0.6rem" }}>
-            <button
-              className="button"
-              style={{ background: "#ffffff", color: "#065f46", fontWeight: "600" }}
-              onClick={go("Live Class")}
-            >
-              🎥 Join Today's Live Class
-            </button>
-            <button
-              className="button"
-              style={{ background: "rgba(255,255,255,0.2)", color: "#ffffff", border: "1px solid rgba(255,255,255,0.4)" }}
-              onClick={go("Exams")}
-            >
-              📝 Take Exam
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="dash-row four">
-        <StatTile label="Today's Classes" value={todayClasses.length} icon="🎥" accent="blue" caption="Live WebRTC lectures scheduled" />
-        <StatTile label="Active Assignments" value="1 Pending" icon="📋" accent="amber" valueTone="warn" caption="Due in 3 days" />
-        <StatTile label="Quiz Average" value="75%" icon="🏆" accent="green" valueTone="pos" caption="Passed Fundamentals assessment" />
-        <StatTile label="Curriculum Progress" value="78%" icon="📈" accent="violet" caption="7 of 9 modules completed" />
-      </div>
-
-      <div className="dash-row two-50-50" style={{ marginTop: "1rem" }}>
-        <SectionCard
-          icon="📅"
-          accent="blue"
-          title="Today's Class Timetable"
-          subtitle="Join live lectures with your instructor"
-          action={{ label: "Full Schedule", onClick: go("Timetable") }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-            {todayClasses.map((cls) => (
-              <div
-                key={cls.id}
-                style={{
-                  border: "1px solid var(--border, #e2e8f0)",
-                  borderRadius: "10px",
-                  padding: "1rem",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  background: "var(--surface, #ffffff)",
-                }}
-              >
-                <div>
-                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.3rem" }}>
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        padding: "0.15rem 0.5rem",
-                        background: "var(--accent-light, #eff6ff)",
-                        color: "var(--accent, #2563eb)",
-                        borderRadius: "4px",
-                        fontWeight: "600",
-                      }}
-                    >
-                      {cls.time}
-                    </span>
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted, #64748b)" }}>
-                      {cls.room}
-                    </span>
-                  </div>
-                  <strong style={{ fontSize: "1rem" }}>{cls.subject}</strong>
-                  <div style={{ fontSize: "0.85rem", color: "var(--text-muted, #64748b)", marginTop: "0.2rem" }}>
-                    👨‍🏫 {cls.faculty}
-                  </div>
-                </div>
-                <button
-                  className="button primary small"
-                  onClick={go("Live Class")}
-                >
-                  🎥 Join Class
-                </button>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          icon="📋"
-          accent="amber"
-          title="My Projects & Coursework"
-          subtitle="Deliverables, submission status, and faculty marks"
-          action={{ label: "View All", onClick: go("Assignments") }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-            {myAssignments.map((asg, idx) => (
-              <div key={idx} style={{ padding: "0.85rem", border: "1px solid var(--border, #e2e8f0)", borderRadius: "8px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-                  <strong>{asg.title}</strong>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      padding: "0.15rem 0.5rem",
-                      borderRadius: "4px",
-                      fontWeight: "600",
-                      background: asg.status === "Graded" ? "#d1fae5" : "#fef3c7",
-                      color: asg.status === "Graded" ? "#065f46" : "#92400e",
-                    }}
-                  >
-                    {asg.status === "Graded" ? `Graded: ${asg.marks}` : `Due: ${asg.due}`}
-                  </span>
-                </div>
-                <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "var(--text-muted, #64748b)" }}>
-                  {asg.feedback}
-                </p>
-                {asg.status !== "Graded" && (
-                  <button className="button primary small" style={{ marginTop: "0.4rem" }} onClick={go("Assignments")}>
-                    📤 Submit Deliverable
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      </div>
-
-      <div className="dash-row two-50-50" style={{ marginTop: "1rem" }}>
-        <SectionCard
-          icon="📚"
-          accent="violet"
-          title="My Enrolled Courses & Syllabus"
-          subtitle="Curriculum progress and ongoing learning milestones"
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {studentCourses.map((c, idx) => (
-              <div key={idx} style={{ borderBottom: idx < studentCourses.length - 1 ? "1px solid var(--border, #e2e8f0)" : "none", paddingBottom: "0.75rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.3rem" }}>
-                  <strong>{c.title}</strong>
-                  <span style={{ fontSize: "0.85rem", fontWeight: "600", color: "#2563eb" }}>
-                    {c.progress}% ({c.completedModules}/{c.totalModules} modules)
-                  </span>
-                </div>
-                <div style={{ height: "6px", background: "var(--border, #e2e8f0)", borderRadius: "3px", overflow: "hidden", marginBottom: "0.4rem" }}>
-                  <div style={{ height: "100%", width: `${c.progress}%`, background: "var(--accent, #2563eb)", borderRadius: "3px" }} />
-                </div>
-                <div style={{ fontSize: "0.8rem", color: "var(--text-muted, #64748b)" }}>
-                  Current Lesson: <em>{c.currentTopic}</em>
-                </div>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          icon="📝"
-          title="Examinations & Quizzes"
-          subtitle="Test your comprehension and view assessment scores"
-          action={{ label: "All Quizzes", onClick: go("Exams") }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-            {myExams.map((ex, idx) => (
-              <div key={idx} style={{ padding: "0.85rem", background: "var(--accent-light, #f8fafc)", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <strong>{ex.title}</strong>
-                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted, #64748b)", marginTop: "0.2rem" }}>
-                    Status: {ex.status}
-                  </div>
-                </div>
-                {ex.passed !== null ? (
-                  <span style={{ fontWeight: "700", color: "#10b981", fontSize: "0.95rem" }}>
-                    {ex.score} (Passed)
-                  </span>
-                ) : (
-                  <button className="button primary small" onClick={go("Exams")}>
-                    Start Exam
-                  </button>
-                )}
-              </div>
-            ))}
-            <div style={{ marginTop: "0.5rem", padding: "0.75rem", border: "1px dashed var(--border, #cbd5e1)", borderRadius: "8px", textAlign: "center" }}>
-              <span style={{ fontSize: "0.85rem", color: "var(--text-muted, #64748b)" }}>
-                Have feedback for your instructor?
-              </span>{" "}
-              <button className="button secondary small" style={{ marginLeft: "0.5rem" }} onClick={go("Reviews")}>
-                ⭐ Submit Faculty Review
-              </button>
-            </div>
-          </div>
-        </SectionCard>
-      </div>
-    </div>
-  );
+  return <LearnerDashboard profile={profile} onNavigate={onNavigate} role="student" />;
 }
 
-/* ------------------- Professional Learning Portal ------------------- */
-
 function ProfessionalDashboard({ profile, onNavigate }) {
-  const go = (tab) => () => onNavigate(tab);
-  const name = profile?.full_name || "Professional";
-
-  return (
-    <div className="dashboard-content">
-      <div
-        className="table-card"
-        style={{
-          padding: "1.5rem",
-          marginBottom: "1.5rem",
-          background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)",
-          color: "#ffffff",
-          borderRadius: "14px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-          <div>
-            <div
-              style={{
-                display: "inline-block",
-                background: "rgba(255,255,255,0.2)",
-                padding: "0.25rem 0.75rem",
-                borderRadius: "9999px",
-                fontSize: "0.8rem",
-                fontWeight: "600",
-                marginBottom: "0.5rem",
-              }}
-            >
-              💼 Professional & Corporate Learning Pulse
-            </div>
-            <h2 style={{ margin: "0 0 0.25rem 0", fontSize: "1.6rem", color: "#ffffff" }}>
-              Welcome, {name}
-            </h2>
-            <p style={{ margin: 0, opacity: 0.85, fontSize: "0.95rem" }}>
-              Track executive workshops, industry project assessments, and scheduled mentoring sessions.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "0.6rem" }}>
-            <button
-              className="button"
-              style={{ background: "#ffffff", color: "#1e293b", fontWeight: "600" }}
-              onClick={go("Live Class")}
-            >
-              🎥 Join Mentoring Room
-            </button>
-            <button
-              className="button"
-              style={{ background: "rgba(255,255,255,0.2)", color: "#ffffff", border: "1px solid rgba(255,255,255,0.4)" }}
-              onClick={go("Assignments")}
-            >
-              📋 Project Submissions
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="dash-row four">
-        <StatTile label="Mentoring Sessions" value="2" icon="🎥" accent="blue" caption="Upcoming this week" />
-        <StatTile label="Industry Projects" value="1 Active" icon="📋" accent="violet" caption="Double-Entry Balancing" />
-        <StatTile label="Certification Status" value="In Progress" icon="🏆" accent="amber" caption="85% criteria fulfilled" />
-        <StatTile label="Peer Feedback" value="5.0 ★" icon="⭐" accent="green" valueTone="pos" caption="Industry mentor ratings" />
-      </div>
-
-      <div className="dash-row two-50-50" style={{ marginTop: "1rem" }}>
-        <SectionCard
-          icon="📅"
-          accent="blue"
-          title="Scheduled Executive Sessions"
-          subtitle="Virtual mentorship & workshop sessions"
-          action={{ label: "Timetable", onClick: go("Timetable") }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            <div style={{ padding: "0.85rem", border: "1px solid var(--border, #e2e8f0)", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <span style={{ fontSize: "0.75rem", padding: "0.15rem 0.5rem", background: "var(--accent-light, #eff6ff)", color: "var(--accent, #2563eb)", borderRadius: "4px", fontWeight: "600" }}>
-                  Wednesday · 02:00 PM - 03:30 PM
-                </span>
-                <div style={{ fontWeight: "600", marginTop: "0.3rem" }}>Financial Accounting & Business Controls</div>
-                <small style={{ color: "var(--text-muted, #64748b)" }}>Led by CMA Suresh Pillai</small>
-              </div>
-              <button className="button primary small" onClick={go("Live Class")}>
-                🎥 Join
-              </button>
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          icon="📋"
-          accent="amber"
-          title="Applied Case Studies & Projects"
-          subtitle="Practical capstone submissions"
-          action={{ label: "Assignments", onClick: go("Assignments") }}
-        >
-          <div style={{ padding: "0.85rem", border: "1px solid var(--border, #e2e8f0)", borderRadius: "8px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.3rem" }}>
-              <strong>Double-Entry Ledger Balancing Case Study</strong>
-              <span style={{ fontSize: "0.8rem", color: "#d97706", fontWeight: "600" }}>Due: 2026-09-15</span>
-            </div>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted, #64748b)", margin: "0.25rem 0" }}>
-              Reconcile bank statements against cash ledger entries and detail all reconciling items.
-            </p>
-            <button className="button primary small" style={{ marginTop: "0.4rem" }} onClick={go("Assignments")}>
-              📤 Submit Solution
-            </button>
-          </div>
-        </SectionCard>
-      </div>
-    </div>
-  );
+  return <LearnerDashboard profile={profile} onNavigate={onNavigate} role="professional" />;
 }

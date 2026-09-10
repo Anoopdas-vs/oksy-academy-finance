@@ -1,289 +1,167 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal } from "../components/ui.jsx";
-import { today } from "../lib/format.js";
+import {
+  fetchFacultyReviews,
+  submitFacultyReview,
+  fetchFacultyProfiles,
+} from "../lib/academy.js";
 
-const DEFAULT_REVIEWS = [
-  {
-    id: "rev_1",
-    faculty: "Prof. Arvind Kumar",
-    subject: "Full-Stack Web Development",
-    rating: 5,
-    clarity: 5,
-    punctuality: 5,
-    studentName: "Devika S.",
-    date: "2026-09-07",
-    comment: "The practical coding sessions and live debugging exercises made complex React concepts very clear. Excellent instructor!",
-  },
-  {
-    id: "rev_2",
-    faculty: "Dr. Meera Nair",
-    subject: "Database Systems & Supabase",
-    rating: 4,
-    clarity: 5,
-    punctuality: 4,
-    studentName: "Rahul Menon",
-    date: "2026-09-05",
-    comment: "Great coverage of PostgreSQL Row-Level Security and indexing. Would appreciate more hands-on schema design quizzes.",
-  },
-  {
-    id: "rev_3",
-    faculty: "CMA Suresh Pillai",
-    subject: "Financial Accounting & Business Logic",
-    rating: 5,
-    clarity: 5,
-    punctuality: 5,
-    studentName: "Sneha George",
-    date: "2026-09-02",
-    comment: "Clear and methodical explanation of bank reconciliation and outstanding dues tracking. Helped immensely with our projects.",
-  },
-];
+const Stars = ({ n }) => <span aria-label={`${n} of 5`}>{"★".repeat(n)}{"☆".repeat(5 - n)}</span>;
+const emptyForm = { faculty_id: "", faculty_name: "", subject: "", rating: 5, clarity: 5, punctuality: 5, comment: "" };
 
-const FACULTY_LIST = [
-  { name: "Prof. Arvind Kumar", subject: "Full-Stack Web Development" },
-  { name: "Dr. Meera Nair", subject: "Database Systems & Supabase" },
-  { name: "CMA Suresh Pillai", subject: "Financial Accounting & Business Logic" },
-  { name: "Anoopdas V S", subject: "AI & Automated Development Workflows" },
-];
+export default function ReviewsPage({ access }) {
+  const isStudent = access.isStudent;
+  const [reviews, setReviews] = useState([]);
+  const [faculty, setFaculty] = useState([]);
+  const [pending, setPending] = useState(false);
+  const [err, setErr] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [busy, setBusy] = useState(false);
 
-export default function ReviewsPage({ profile }) {
-  const [reviews, setReviews] = useState(() => {
-    try {
-      const saved = localStorage.getItem("oksy_reviews");
-      return saved ? JSON.parse(saved) : DEFAULT_REVIEWS;
-    } catch {
-      return DEFAULT_REVIEWS;
-    }
-  });
-  const [showModal, setShowModal] = useState(false);
-  const [selectedFaculty, setSelectedFaculty] = useState("All");
+  const load = useCallback(async () => {
+    const { rows, error } = await fetchFacultyReviews();
+    if (error?.suitePending) { setPending(true); return; }
+    if (error) setErr(error.message);
+    setReviews(rows);
+    const { rows: f } = await fetchFacultyProfiles();
+    setFaculty(f);
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("oksy_reviews", JSON.stringify(reviews));
-    } catch {
-      // ignore
-    }
-  }, [reviews]);
+  // Faculty see only reviews about themselves; the DB already scopes this,
+  // but keep the guard for clarity.
+  const scoped = useMemo(
+    () => (access.isFaculty ? reviews.filter((r) => r.faculty_id === access.userId) : reviews),
+    [reviews, access.isFaculty, access.userId]
+  );
 
-  const [form, setForm] = useState({
-    faculty: FACULTY_LIST[0].name,
-    rating: 5,
-    clarity: 5,
-    punctuality: 5,
-    comment: "",
-  });
+  const byFaculty = useMemo(() => {
+    const m = new Map();
+    scoped.forEach((r) => {
+      const k = r.faculty_name;
+      if (!m.has(k)) m.set(k, { name: k, n: 0, rating: 0, clarity: 0, punctuality: 0 });
+      const g = m.get(k);
+      g.n += 1; g.rating += r.rating; g.clarity += r.clarity; g.punctuality += r.punctuality;
+    });
+    return [...m.values()].map((g) => ({
+      ...g,
+      rating: (g.rating / g.n).toFixed(1),
+      clarity: (g.clarity / g.n).toFixed(1),
+      punctuality: (g.punctuality / g.n).toFixed(1),
+    }));
+  }, [scoped]);
 
-  const averageRating = (
-    reviews.reduce((acc, r) => acc + r.rating, 0) / (reviews.length || 1)
-  ).toFixed(1);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!form.comment.trim()) return;
-
-    const matched = FACULTY_LIST.find((f) => f.name === form.faculty);
-    const newRev = {
-      id: "rev_" + Date.now(),
-      faculty: form.faculty,
-      subject: matched?.subject || "Course Module",
+  const submit = async (e) => {
+    e.preventDefault(); setBusy(true); setErr("");
+    const chosen = faculty.find((f) => f.id === form.faculty_id);
+    const { error } = await submitFacultyReview({
+      faculty_id: form.faculty_id || null,
+      faculty_name: chosen ? (chosen.full_name || chosen.email) : form.faculty_name.trim(),
+      subject: form.subject.trim() || null,
       rating: Number(form.rating),
       clarity: Number(form.clarity),
       punctuality: Number(form.punctuality),
-      studentName: profile?.full_name || "Student (Verified)",
-      date: today(),
-      comment: form.comment,
-    };
-
-    setReviews([newRev, ...reviews]);
-    setShowModal(false);
-    setForm({
-      faculty: FACULTY_LIST[0].name,
-      rating: 5,
-      clarity: 5,
-      punctuality: 5,
-      comment: "",
+      comment: form.comment.trim() || null,
+      student_id: access.userId,
     });
-    alert("Thank you! Your feedback has been recorded.");
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    setShowForm(false); setForm(emptyForm); load();
   };
-
-  const filtered = reviews.filter(
-    (r) => selectedFaculty === "All" || r.faculty === selectedFaculty
-  );
 
   return (
     <section className="page">
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
+      <div className="page-header">
         <div>
-          <h2>Faculty & Course Reviews</h2>
-          <p>Transparent 360° academic feedback to maintain high teaching standards and student satisfaction.</p>
+          <h2>Faculty Reviews</h2>
+          <p>{isStudent ? "Rate your faculty — feedback is anonymised in reports." : "Student feedback and rating trends."}</p>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button className="button primary" onClick={() => setShowModal(true)}>
-            ★ Write Faculty Review
-          </button>
-        </div>
+        {isStudent && !pending && <button className="button primary" onClick={() => setShowForm(true)}>+ Add review</button>}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
-        <div className="table-card" style={{ padding: "1.25rem" }}>
-          <div style={{ fontSize: "0.85rem", color: "var(--text-muted, #64748b)" }}>Average Faculty Rating</div>
-          <div style={{ fontSize: "2rem", fontWeight: "700", color: "#f59e0b", margin: "0.3rem 0" }}>
-            ⭐ {averageRating} <span style={{ fontSize: "1rem", color: "var(--text-muted, #64748b)", fontWeight: "normal" }}>/ 5.0</span>
-          </div>
-          <div style={{ fontSize: "0.8rem", color: "#10b981" }}>Based on verified student ratings</div>
+      {pending && (
+        <div className="empty-state">
+          <div className="empty-icon">⭐</div>
+          <h3>Reviews setup pending</h3>
+          <p>Run <code>supabase/migration-academy-suite-v2.sql</code> to enable reviews.</p>
         </div>
+      )}
+      {err && <div className="auth-message error">{err}</div>}
 
-        <div className="table-card" style={{ padding: "1.25rem" }}>
-          <div style={{ fontSize: "0.85rem", color: "var(--text-muted, #64748b)" }}>Total Reviews Recorded</div>
-          <div style={{ fontSize: "2rem", fontWeight: "700", margin: "0.3rem 0" }}>
-            {reviews.length}
-          </div>
-          <div style={{ fontSize: "0.8rem", color: "var(--text-muted, #64748b)" }}>All batches active</div>
-        </div>
-
-        <div className="table-card" style={{ padding: "1.25rem" }}>
-          <div style={{ fontSize: "0.85rem", color: "var(--text-muted, #64748b)" }}>Teaching Clarity Score</div>
-          <div style={{ fontSize: "2rem", fontWeight: "700", color: "#3b82f6", margin: "0.3rem 0" }}>
-            96%
-          </div>
-          <div style={{ fontSize: "0.8rem", color: "var(--text-muted, #64748b)" }}>High conceptual clarity</div>
-        </div>
-      </div>
-
-      <div className="table-card" style={{ padding: "1.5rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
-          <h3 style={{ margin: 0 }}>Recent Student Feedback</h3>
-          <select
-            className="input"
-            value={selectedFaculty}
-            onChange={(e) => setSelectedFaculty(e.target.value)}
-            style={{ width: "auto" }}
-          >
-            <option value="All">All Faculty</option>
-            {FACULTY_LIST.map((f) => (
-              <option key={f.name} value={f.name}>{f.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {filtered.map((rev) => (
-            <div
-              key={rev.id}
-              style={{
-                border: "1px solid var(--border, #e2e8f0)",
-                borderRadius: "10px",
-                padding: "1.25rem",
-                background: "var(--surface, #ffffff)",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
-                <div>
-                  <h4 style={{ margin: "0 0 0.2rem 0" }}>{rev.faculty}</h4>
-                  <span style={{ fontSize: "0.85rem", color: "var(--text-muted, #64748b)" }}>
-                    Module: {rev.subject}
-                  </span>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <span style={{ color: "#f59e0b", fontSize: "1.1rem" }}>
-                    {"★".repeat(rev.rating)}{"☆".repeat(5 - rev.rating)}
-                  </span>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #64748b)" }}>{rev.date}</div>
-                </div>
-              </div>
-
-              <p style={{ margin: "0.5rem 0", fontSize: "0.95rem", lineHeight: "1.5", color: "var(--text, #334155)" }}>
-                "{rev.comment}"
-              </p>
-
-              <div style={{ display: "flex", gap: "1rem", marginTop: "0.75rem", fontSize: "0.8rem", color: "var(--text-muted, #64748b)" }}>
-                <span>🎯 Clarity: {rev.clarity}/5</span>
-                <span>⏰ Punctuality: {rev.punctuality}/5</span>
-                <span>👤 By: {rev.studentName}</span>
-              </div>
+      {!pending && (
+        <>
+          {byFaculty.length > 0 && (
+            <div className="table-card">
+              <div className="card-heading"><div><h3>Averages</h3></div></div>
+              <table>
+                <thead><tr><th>Faculty</th><th>Reviews</th><th>Overall</th><th>Clarity</th><th>Punctuality</th></tr></thead>
+                <tbody>
+                  {byFaculty.map((g) => (
+                    <tr key={g.name}>
+                      <td><strong>{g.name}</strong></td>
+                      <td>{g.n}</td>
+                      <td>{g.rating}</td>
+                      <td>{g.clarity}</td>
+                      <td>{g.punctuality}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
-        </div>
-      </div>
+          )}
 
-      {showModal && (
-        <Modal title="Submit Faculty Feedback" onClose={() => setShowModal(false)}>
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <div className="field">
-              <label>Select Faculty Member</label>
-              <select
-                className="input"
-                value={form.faculty}
-                onChange={(e) => setForm({ ...form, faculty: e.target.value })}
-              >
-                {FACULTY_LIST.map((f) => (
-                  <option key={f.name} value={f.name}>{f.name} — {f.subject}</option>
+          <div className="table-card">
+            <div className="card-heading"><div><h3>Recent reviews</h3></div></div>
+            <table>
+              <thead><tr><th>Faculty</th><th>Subject</th><th>Rating</th><th>Comment</th><th>Date</th></tr></thead>
+              <tbody>
+                {scoped.length === 0 && <tr><td colSpan={5} className="table-empty">No reviews yet.</td></tr>}
+                {scoped.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.faculty_name}</td>
+                    <td>{r.subject || "—"}</td>
+                    <td><Stars n={r.rating} /></td>
+                    <td>{r.comment || "—"}</td>
+                    <td>{(r.created_at || "").slice(0, 10)}</td>
+                  </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {showForm && (
+        <Modal title="Rate a faculty member" onClose={() => setShowForm(false)}>
+          <form className="form-grid" onSubmit={submit}>
+            {err && <div className="form-error-banner">{err}</div>}
+            <div className="field">
+              <label>Faculty</label>
+              <select value={form.faculty_id} onChange={(e) => setForm({ ...form, faculty_id: e.target.value })} required>
+                <option value="">— select —</option>
+                {faculty.map((f) => <option key={f.id} value={f.id}>{f.full_name || f.email}</option>)}
               </select>
             </div>
-
             <div className="field">
-              <label>Overall Experience (1 to 5 Stars)</label>
-              <select
-                className="input"
-                value={form.rating}
-                onChange={(e) => setForm({ ...form, rating: Number(e.target.value) })}
-              >
-                <option value={5}>★★★★★ (5 Stars - Exceptional)</option>
-                <option value={4}>★★★★☆ (4 Stars - Very Good)</option>
-                <option value={3}>★★★☆☆ (3 Stars - Good)</option>
-                <option value={2}>★★☆☆☆ (2 Stars - Fair)</option>
-                <option value={1}>★☆☆☆☆ (1 Star - Poor)</option>
-              </select>
+              <label>Subject (optional)</label>
+              <input className="input" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} />
             </div>
-
+            {["rating", "clarity", "punctuality"].map((k) => (
+              <div className="field" key={k}>
+                <label style={{ textTransform: "capitalize" }}>{k}</label>
+                <select value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })}>
+                  {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} ★</option>)}
+                </select>
+              </div>
+            ))}
             <div className="field">
-              <label>Conceptual Clarity (1 to 5)</label>
-              <select
-                className="input"
-                value={form.clarity}
-                onChange={(e) => setForm({ ...form, clarity: Number(e.target.value) })}
-              >
-                <option value={5}>5 - Crystal clear explanations</option>
-                <option value={4}>4 - Mostly clear</option>
-                <option value={3}>3 - Average clarity</option>
-                <option value={2}>2 - Difficult to follow</option>
-                <option value={1}>1 - Unclear</option>
-              </select>
+              <label>Comment</label>
+              <textarea className="input" rows={3} value={form.comment} onChange={(e) => setForm({ ...form, comment: e.target.value })} />
             </div>
-
-            <div className="field">
-              <label>Punctuality & Session Management (1 to 5)</label>
-              <select
-                className="input"
-                value={form.punctuality}
-                onChange={(e) => setForm({ ...form, punctuality: Number(e.target.value) })}
-              >
-                <option value={5}>5 - Starts & finishes exactly on schedule</option>
-                <option value={4}>4 - Good adherence to timing</option>
-                <option value={3}>3 - Occasional slight delays</option>
-              </select>
-            </div>
-
-            <div className="field">
-              <label>Your Detailed Feedback / Review</label>
-              <textarea
-                className="input"
-                rows={4}
-                required
-                placeholder="Share specific examples of what went well or what could be improved..."
-                value={form.comment}
-                onChange={(e) => setForm({ ...form, comment: e.target.value })}
-              />
-            </div>
-
-            <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <button type="button" className="button secondary" onClick={() => setShowModal(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="button primary">
-                Submit Feedback
-              </button>
+            <div className="form-actions">
+              <button type="button" className="button secondary" onClick={() => setShowForm(false)} disabled={busy}>Cancel</button>
+              <button type="submit" className="button primary" disabled={busy}>{busy ? "Submitting…" : "Submit review"}</button>
             </div>
           </form>
         </Modal>

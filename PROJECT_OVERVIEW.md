@@ -70,7 +70,9 @@ src/
     AdminPage.jsx           Batches / Categories / Users / Access (sub-tabs)
   lib/
     supabaseClient.js       createClient from VITE_ env
-    data.js (~330 loc)      ALL database reads/writes — the "API layer"
+    data.js (~330 loc)      ALL finance DB reads/writes — the "API layer"
+    academy.js              Academy Suite DB layer (timetable, live class,
+                            assignments, exams, reviews, notifications)
     access.js               roles, labels, per-role area permissions
     fees.js                 canonical fee + account-balance math
     fees.test.js            node:test coverage for fees.js
@@ -85,7 +87,9 @@ src/
     usePagedList.js         client-side search + pagination hook
 supabase/
   schema.sql               full DDL incl. Academy Suite — run ONCE on a fresh project
-  migration-*.sql (×6)      incremental patches, run IN ORDER after schema.sql
+  migration-*.sql (×7)      incremental patches, run IN ORDER after schema.sql
+                            (…-v2.sql is the real Academy Suite: batch/faculty
+                            scoping, RLS, server-side exam scoring)
   functions/create-user/    Deno Edge Function (admin-only user creation)
 ```
 
@@ -194,7 +198,7 @@ No Dockerfile, no CI yet, no `supabase/config.toml` / CLI migrations folder.
 - `src/App.jsx` (~1470 loc) holds everything — state, handlers, `totals`
   math, nav, render. Split before large feature work.
 - `src/App.css` is one ~2700-line file.
-- No TypeScript and no error boundary — in a money app. Tests cover
+- No TypeScript. A page-level `ErrorBoundary` now wraps the tab area. Tests cover
   `fees.js` + `reconcile.js` only (`npm test`); pages/components untested.
 - `xlsx` and `recharts` are the two heavy deps. `xlsx` is loaded via dynamic
   `import()` in `bankStatement.js`, `reports.js`, `templates.js` and

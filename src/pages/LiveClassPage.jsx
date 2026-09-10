@@ -1,129 +1,178 @@
-import React, { useState } from "react";
-import { useAuth } from "../context/useAuth.js";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  fetchTimetable,
+  fetchLiveSessions,
+  startLiveSession,
+  endLiveSession,
+  joinLiveSession,
+  fetchAttendance,
+} from "../lib/academy.js";
 
-const DEFAULT_ROOMS = [
-  { id: "OksyAcademy-WebDev", title: "Full-Stack Web Dev Lab", batch: "FSW-2026-A", active: true },
-  { id: "OksyAcademy-Databases", title: "Database Architecture", batch: "FSW-2026-A", active: false },
-  { id: "OksyAcademy-Accounts", title: "Business & Financial Accounting", batch: "BCOM-2026", active: false },
-  { id: "OksyAcademy-General", title: "Open Study Room & Doubts", batch: "All Batches", active: true },
-];
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-export default function LiveClassPage({ initialRoom, initialTitle }) {
-  const { profile } = useAuth();
-  const userName = profile?.full_name || profile?.email?.split("@")[0] || "Student";
-  const [selectedRoom, setSelectedRoom] = useState(
-    initialRoom ? initialRoom.replace("https://meet.jit.si/", "") : DEFAULT_ROOMS[0].id
-  );
-  const [inCall, setInCall] = useState(false);
-  const [notes, setNotes] = useState("");
+export default function LiveClassPage({ access }) {
+  const today = DAY_NAMES[new Date().getDay()];
+  const [slots, setSlots] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [pending, setPending] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [attendanceFor, setAttendanceFor] = useState(null); // session id
+  const [attendance, setAttendance] = useState([]);
 
-  const jitsiUrl = `https://meet.jit.si/${selectedRoom}#userInfo.displayName="${encodeURIComponent(userName)}"&config.prejoinPageEnabled=false`;
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [tt, ls] = await Promise.all([fetchTimetable(), fetchLiveSessions()]);
+    if (tt.error?.suitePending || ls.error?.suitePending) setPending(true);
+    setSlots(tt.rows.filter((s) => s.mode === "live" && s.status !== "cancelled"));
+    setSessions(ls.rows);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const activeSessionForSlot = (slotId) =>
+    sessions.find((s) => s.slot_id === slotId && !s.ended_at);
+
+  const openLink = (link) => {
+    if (link) window.open(link, "_blank", "noopener");
+  };
+
+  const onStart = async (slot) => {
+    const { row, error } = await startLiveSession(slot.id, access.userId);
+    if (error) return alert(error.message);
+    openLink(slot.join_link);
+    if (row) setSessions((prev) => [row, ...prev]);
+  };
+
+  const onEnd = async (session) => {
+    await endLiveSession(session.id);
+    load();
+  };
+
+  const onJoin = async (slot) => {
+    const active = activeSessionForSlot(slot.id);
+    if (active && access.userId) await joinLiveSession(active.id, access.userId);
+    openLink(slot.join_link);
+  };
+
+  const showAttendance = async (session) => {
+    setAttendanceFor(session.id);
+    const { rows } = await fetchAttendance(session.id);
+    setAttendance(rows);
+  };
+
+  const todaySlots = slots.filter((s) => s.day_of_week === today);
+  const canHost = access.isFaculty || access.isStaffOrAdmin;
 
   return (
     <section className="page">
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
+      <div className="page-header">
         <div>
-          <h2>Online Classroom {initialTitle ? `— ${initialTitle}` : ""}</h2>
-          <p>Zero-cost, secure WebRTC live classes with screen share, multi-user audio/video, and interactive chat.</p>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          {!inCall ? (
-            <button className="button primary" onClick={() => setInCall(true)}>
-              ▶ Launch Classroom
-            </button>
-          ) : (
-            <button className="button secondary" onClick={() => setInCall(false)} style={{ color: "var(--danger, #ef4444)" }}>
-              ✕ Leave Classroom
-            </button>
-          )}
+          <h2>Live Classes</h2>
+          <p>Today’s live sessions{canHost ? " — start a class to open the room and take attendance." : " — join when your class is live."}</p>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: inCall ? "1fr 320px" : "1fr", gap: "1.5rem" }}>
-        <div className="table-card" style={{ padding: "1.5rem", minHeight: inCall ? "650px" : "auto" }}>
-          {!inCall ? (
-            <div style={{ padding: "2rem 1rem", textAlign: "center" }}>
-              <div style={{ fontSize: "3.5rem", marginBottom: "1rem" }}>🎥</div>
-              <h3 style={{ fontSize: "1.4rem", marginBottom: "0.5rem" }}>Ready to join the live session?</h3>
-              <p style={{ color: "var(--text-muted, #64748b)", maxWidth: "500px", margin: "0 auto 1.5rem auto" }}>
-                Select your classroom room below and click Launch. You will join as <strong>{userName}</strong>.
-              </p>
-
-              <div style={{ maxWidth: "400px", margin: "0 auto 1.5rem auto", textAlign: "left" }}>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "600", marginBottom: "0.4rem" }}>
-                  Select Classroom Room:
-                </label>
-                <select
-                  className="input"
-                  value={selectedRoom}
-                  onChange={(e) => setSelectedRoom(e.target.value)}
-                >
-                  {DEFAULT_ROOMS.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.title} ({r.batch})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "center", gap: "1rem" }}>
-                <button className="button primary" onClick={() => setInCall(true)} style={{ padding: "0.75rem 2rem", fontSize: "1rem" }}>
-                  Join Meeting Now
-                </button>
-                <a
-                  href={`https://meet.jit.si/${selectedRoom}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="button secondary"
-                  style={{ padding: "0.75rem 1.5rem", textDecoration: "none" }}
-                >
-                  Open in New Window ↗
-                </a>
-              </div>
-            </div>
-          ) : (
-            <div style={{ height: "650px", width: "100%", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--border, #e2e8f0)" }}>
-              <iframe
-                title="Live Jitsi Classroom"
-                src={jitsiUrl}
-                style={{ width: "100%", height: "100%", border: "none" }}
-                allow="camera; microphone; fullscreen; display-capture; autoplay"
-              />
-            </div>
-          )}
+      {pending && (
+        <div className="empty-state">
+          <div className="empty-icon">🎥</div>
+          <h3>Live Class setup pending</h3>
+          <p>Run <code>supabase/migration-academy-suite-v2.sql</code> to enable live sessions.</p>
         </div>
+      )}
 
-        {inCall && (
-          <div className="table-card" style={{ padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <h4>Classroom Notebook</h4>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted, #64748b)", margin: 0 }}>
-              Jot down quick questions or notes during the lecture.
-            </p>
-            <textarea
-              className="input"
-              rows={12}
-              placeholder="Take personal lecture notes here..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              style={{ resize: "vertical", width: "100%" }}
-            />
-            <button
-              className="button secondary"
-              onClick={() => {
-                const blob = new Blob([notes], { type: "text/plain" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `notes-${selectedRoom}-${new Date().toISOString().slice(0, 10)}.txt`;
-                a.click();
-              }}
-              disabled={!notes.trim()}
-            >
-              💾 Export Notes
-            </button>
+      {!pending && (
+        <>
+          <div className="table-card">
+            <div className="card-heading"><div><h3>Today · {today}</h3></div></div>
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Subject</th><th>Batch</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody>
+                {loading && <tr><td colSpan={5}>Loading…</td></tr>}
+                {!loading && todaySlots.length === 0 && (
+                  <tr><td colSpan={5} className="table-empty">No live classes scheduled today.</td></tr>
+                )}
+                {todaySlots.map((s) => {
+                  const active = activeSessionForSlot(s.id);
+                  return (
+                    <tr key={s.id}>
+                      <td>{(s.starts_at || "").slice(0, 5)}–{(s.ends_at || "").slice(0, 5)}</td>
+                      <td><strong>{s.subject}</strong></td>
+                      <td><span className="mini-tag">{s.batch_name}</span></td>
+                      <td>{active ? <span className="mini-tag ok">Live now</span> : <span className="mini-tag">Not started</span>}</td>
+                      <td className="row-actions">
+                        {canHost && !active && (
+                          <button className="button primary small" onClick={() => onStart(s)}>Start</button>
+                        )}
+                        {canHost && active && (
+                          <>
+                            <button className="button secondary small" onClick={() => openLink(s.join_link)}>Open room</button>
+                            <button className="button secondary small" onClick={() => showAttendance(active)}>Attendance</button>
+                            <button className="button ghost small danger" onClick={() => onEnd(active)}>End</button>
+                          </>
+                        )}
+                        {!canHost && (
+                          <button
+                            className="button primary small"
+                            disabled={!active}
+                            onClick={() => onJoin(s)}
+                          >
+                            {active ? "Join" : "Waiting…"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+
+          {access.isStaffOrAdmin && (
+            <div className="table-card">
+              <div className="card-heading"><div><h3>Recent sessions</h3><p>Monitor</p></div></div>
+              <table>
+                <thead><tr><th>Started</th><th>Class</th><th>Batch</th><th>Ended</th><th></th></tr></thead>
+                <tbody>
+                  {sessions.slice(0, 15).map((ls) => (
+                    <tr key={ls.id}>
+                      <td>{new Date(ls.started_at).toLocaleString()}</td>
+                      <td>{ls.slot?.subject || "—"}</td>
+                      <td>{ls.slot?.batch_name || "—"}</td>
+                      <td>{ls.ended_at ? new Date(ls.ended_at).toLocaleTimeString() : <span className="mini-tag ok">Live</span>}</td>
+                      <td><button className="button secondary small" onClick={() => showAttendance(ls)}>Attendance</button></td>
+                    </tr>
+                  ))}
+                  {sessions.length === 0 && <tr><td colSpan={5} className="table-empty">No sessions yet.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {attendanceFor && (
+        <div className="table-card">
+          <div className="card-heading between">
+            <div><h3>Attendance</h3><p>{attendance.length} present</p></div>
+            <button className="button secondary small" onClick={() => setAttendanceFor(null)}>Close</button>
+          </div>
+          <table>
+            <thead><tr><th>Student</th><th>Joined</th></tr></thead>
+            <tbody>
+              {attendance.map((a) => (
+                <tr key={a.student_id}>
+                  <td>{a.student?.full_name || a.student?.email || a.student_id}</td>
+                  <td>{new Date(a.joined_at).toLocaleTimeString()}</td>
+                </tr>
+              ))}
+              {attendance.length === 0 && <tr><td colSpan={2} className="table-empty">No one has joined yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

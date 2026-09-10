@@ -92,7 +92,14 @@ export function getAccess(profile, settings = {}) {
     roleLabel: roleLabel(role),
     isSuperAdmin,
     isAdmin,
-    isStaff: approved && !isAdmin,
+    isStaff: approved && role === "staff",
+    // Academic tiers.
+    isStaffOrAdmin: approved && (isAdmin || role === "staff"), // Executive+ — academic monitors/schedulers
+    isFaculty: approved && role === "faculty",
+    isStudent: approved && (role === "student" || role === "professional"),
+    batchName: profile?.batch_name || null,
+    userId: profile?.id || null,
+    fullName: profile?.full_name || profile?.email || "",
     financials,
     areas,
     canOpen: (area) => areas.includes(area),

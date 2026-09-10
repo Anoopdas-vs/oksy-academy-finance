@@ -1,335 +1,291 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Input } from "../components/ui.jsx";
-import { supabase } from "../lib/supabaseClient.js";
+import {
+  fetchTimetable,
+  saveTimetableSlot,
+  deleteTimetableSlot,
+  fetchFacultyProfiles,
+} from "../lib/academy.js";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-const DEFAULT_SCHEDULE = [
-  {
-    id: "1",
-    day: "Monday",
-    time: "09:30 AM - 11:00 AM",
-    subject: "Full-Stack Web Development",
-    batch: "FSW-2026-A",
-    faculty: "Prof. Arvind Kumar",
-    room: "Virtual Room 101",
-    link: "https://meet.jit.si/OksyAcademy-WebDev",
-  },
-  {
-    id: "2",
-    day: "Monday",
-    time: "11:30 AM - 01:00 PM",
-    subject: "Database Systems & Supabase",
-    batch: "FSW-2026-A",
-    faculty: "Dr. Meera Nair",
-    room: "Virtual Room 102",
-    link: "https://meet.jit.si/OksyAcademy-Databases",
-  },
-  {
-    id: "3",
-    day: "Tuesday",
-    time: "10:00 AM - 11:30 AM",
-    subject: "React & Modern Frontend Architecture",
-    batch: "FSW-2026-A",
-    faculty: "Prof. Arvind Kumar",
-    room: "Virtual Room 101",
-    link: "https://meet.jit.si/OksyAcademy-WebDev",
-  },
-  {
-    id: "4",
-    day: "Wednesday",
-    time: "02:00 PM - 03:30 PM",
-    subject: "Financial Accounting & Business Logic",
-    batch: "BCOM-2026",
-    faculty: "CMA Suresh Pillai",
-    room: "Virtual Room 201",
-    link: "https://meet.jit.si/OksyAcademy-Accounts",
-  },
-  {
-    id: "5",
-    day: "Thursday",
-    time: "10:00 AM - 11:30 AM",
-    subject: "AI & Automated Development Workflows",
-    batch: "FSW-2026-A",
-    faculty: "Anoopdas V S",
-    room: "Virtual Room 101",
-    link: "https://meet.jit.si/OksyAcademy-AI",
-  },
-  {
-    id: "6",
-    day: "Friday",
-    time: "02:00 PM - 04:00 PM",
-    subject: "Weekly Project Review & Lab Sessions",
-    batch: "All Batches",
-    faculty: "Faculty Panel",
-    room: "Main Lab",
-    link: "https://meet.jit.si/OksyAcademy-MainLab",
-  },
+const MODES = [
+  { value: "live", label: "Live (online)" },
+  { value: "in_person", label: "In person" },
 ];
 
-export default function TimetablePage({ isAdmin, role, batches = [], onNavigateToClass }) {
-  const canManage = isAdmin || role === "faculty";
-  const [selectedDay, setSelectedDay] = useState(() => {
-    const todayIndex = new Date().getDay(); // 0 is Sunday
-    return todayIndex === 0 ? "Monday" : DAYS[todayIndex - 1] || "Monday";
-  });
+const emptyForm = {
+  id: null,
+  batch_name: "",
+  faculty_id: "",
+  subject: "",
+  day_of_week: "Monday",
+  starts_at: "10:00",
+  ends_at: "11:30",
+  mode: "live",
+  room: "",
+  join_link: "",
+  status: "scheduled",
+};
 
-  const [schedule, setSchedule] = useState(() => {
-    try {
-      const saved = localStorage.getItem("oksy_timetables");
-      return saved ? JSON.parse(saved) : DEFAULT_SCHEDULE;
-    } catch {
-      return DEFAULT_SCHEDULE;
-    }
-  });
-  const [selectedBatch, setSelectedBatch] = useState("All");
-  const [showModal, setShowModal] = useState(false);
+export default function TimetablePage({ access, batches = [], onOpenLiveClass }) {
+  const canManage = access.isStaffOrAdmin;
+  const [slots, setSlots] = useState([]);
+  const [faculty, setFaculty] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState(false);
+  const [err, setErr] = useState("");
+  const [day, setDay] = useState(DAYS[new Date().getDay() ? new Date().getDay() - 1 : 0] || "Monday");
+  const [batchFilter, setBatchFilter] = useState("all");
+  const [form, setForm] = useState(emptyForm);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("oksy_timetables", JSON.stringify(schedule));
-    } catch {
-      // ignore
-    }
-  }, [schedule]);
-
-  const [form, setForm] = useState({
-    day: "Monday",
-    time: "10:00 AM - 11:30 AM",
-    subject: "",
-    batch: batches[0]?.name || "All Batches",
-    faculty: "",
-    room: "Virtual Room 101",
-    link: "",
-  });
-
-  useEffect(() => {
-    async function loadRemote() {
-      try {
-        const { data, error } = await supabase.from("timetables").select("*");
-        if (!error && data && data.length > 0) {
-          setSchedule(data);
-        }
-      } catch {
-        // Fallback to default in-memory schedule
-      }
-    }
-    loadRemote();
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { rows, error } = await fetchTimetable();
+    if (error?.suitePending) setPending(true);
+    else if (error) setErr(error.message);
+    setSlots(rows);
+    setLoading(false);
   }, []);
 
-  const filteredSlots = schedule.filter((item) => {
-    const dayMatch = item.day === selectedDay;
-    const batchMatch = selectedBatch === "All" || item.batch === selectedBatch || item.batch === "All Batches";
-    return dayMatch && batchMatch;
+  useEffect(() => {
+    load();
+    if (canManage) fetchFacultyProfiles().then(({ rows }) => setFaculty(rows));
+  }, [load, canManage]);
+
+  const facultyName = useMemo(() => {
+    const m = new Map(faculty.map((f) => [f.id, f.full_name || f.email]));
+    return (id) => m.get(id) || "Unassigned";
+  }, [faculty]);
+
+  const visible = slots.filter((s) => {
+    if (s.day_of_week !== day) return false;
+    if (batchFilter !== "all" && s.batch_name !== batchFilter) return false;
+    return true;
   });
 
-  const handleAddSlot = async (e) => {
-    e.preventDefault();
-    if (!form.subject || !form.time) return;
-
-    const newSlot = {
-      ...form,
-      id: "slot_" + Date.now(),
-      link: form.link || `https://meet.jit.si/OksyAcademy-${form.subject.replace(/\\s+/g, "")}`,
-    };
-
-    setSchedule((prev) => [...prev, newSlot]);
-    setShowModal(false);
-
-    try {
-      await supabase.from("timetables").insert([newSlot]);
-    } catch {
-      // Ignored if offline or migration pending
-    }
+  const openCreate = () => {
+    setForm({ ...emptyForm, batch_name: batches[0]?.name || "" });
+    setShowForm(true);
+  };
+  const openEdit = (s) => {
+    setForm({
+      id: s.id,
+      batch_name: s.batch_name,
+      faculty_id: s.faculty_id || "",
+      subject: s.subject,
+      day_of_week: s.day_of_week,
+      starts_at: (s.starts_at || "10:00").slice(0, 5),
+      ends_at: (s.ends_at || "11:30").slice(0, 5),
+      mode: s.mode,
+      room: s.room || "",
+      join_link: s.join_link || "",
+      status: s.status,
+    });
+    setShowForm(true);
   };
 
-  const handleDeleteSlot = async (id) => {
-    if (!window.confirm("Delete this scheduled slot?")) return;
-    setSchedule((prev) => prev.filter((s) => s.id !== id));
-    try {
-      await supabase.from("timetables").delete().eq("id", id);
-    } catch {
-      // Ignored if offline
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr("");
+    setSaving(true);
+    const payload = {
+      ...(form.id ? { id: form.id } : {}),
+      batch_name: form.batch_name,
+      faculty_id: form.faculty_id || null,
+      subject: form.subject.trim(),
+      day_of_week: form.day_of_week,
+      starts_at: form.starts_at,
+      ends_at: form.ends_at,
+      mode: form.mode,
+      room: form.room.trim() || null,
+      join_link: form.join_link.trim() || null,
+      status: form.status,
+    };
+    const { error } = await saveTimetableSlot(payload);
+    setSaving(false);
+    if (error) {
+      setErr(error.message);
+      return;
     }
+    setShowForm(false);
+    load();
+  };
+
+  const cancelSlot = async (s) => {
+    if (!window.confirm(`Cancel ${s.subject} for ${s.batch_name}?`)) return;
+    await saveTimetableSlot({ id: s.id, status: "cancelled" });
+    load();
+  };
+  const removeSlot = async (s) => {
+    if (!window.confirm("Delete this slot permanently?")) return;
+    await deleteTimetableSlot(s.id);
+    load();
   };
 
   return (
     <section className="page">
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
+      <div className="page-header">
         <div>
-          <h2>Class Timetable & Schedule</h2>
-          <p>View upcoming lecture slots, assigned faculty, and 1-click classroom join links.</p>
+          <h2>Timetable</h2>
+          <p>
+            {canManage
+              ? "Schedule classes, assign faculty and set join links."
+              : "Your weekly class schedule."}
+          </p>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <select
-            className="input"
-            value={selectedBatch}
-            onChange={(e) => setSelectedBatch(e.target.value)}
-            style={{ width: "auto" }}
-          >
-            <option value="All">All Batches</option>
-            {batches.map((b) => (
-              <option key={b.name || b.id} value={b.name || b.id}>
-                {b.name || b.id}
-              </option>
-            ))}
-          </select>
-          {canManage && (
-            <button className="button primary" onClick={() => setShowModal(true)}>
-              + Add Class Slot
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", overflowX: "auto", paddingBottom: "0.5rem" }}>
-        {DAYS.map((day) => (
-          <button
-            key={day}
-            onClick={() => setSelectedDay(day)}
-            className={`button ${selectedDay === day ? "primary" : "secondary"}`}
-            style={{ minWidth: "110px", borderRadius: "9999px", padding: "0.5rem 1rem", fontSize: "0.9rem" }}
-          >
-            {day}
+        {canManage && !pending && (
+          <button className="button primary" onClick={openCreate}>
+            + Schedule class
           </button>
-        ))}
-      </div>
-
-      <div className="table-card" style={{ padding: "1.5rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <h3 style={{ margin: 0 }}>{selectedDay}'s Sessions</h3>
-          <span style={{ fontSize: "0.85rem", opacity: 0.7 }}>{filteredSlots.length} slot(s) scheduled</span>
-        </div>
-
-        {filteredSlots.length === 0 ? (
-          <div style={{ padding: "3rem 1rem", textAlign: "center", color: "var(--text-muted, #64748b)" }}>
-            <p style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>No classes scheduled for {selectedDay}.</p>
-            <p style={{ fontSize: "0.9rem" }}>Select another day or add a new schedule slot.</p>
-          </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "1rem" }}>
-            {filteredSlots.map((slot) => (
-              <div
-                key={slot.id}
-                style={{
-                  border: "1px solid var(--border, #e2e8f0)",
-                  borderRadius: "12px",
-                  padding: "1.25rem",
-                  background: "var(--surface, #ffffff)",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.03)",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                    <span style={{ fontSize: "0.8rem", padding: "0.2rem 0.6rem", background: "var(--accent-light, #eff6ff)", color: "var(--accent, #2563eb)", borderRadius: "6px", fontWeight: "600" }}>
-                      {slot.time}
-                    </span>
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted, #64748b)" }}>
-                      {slot.batch}
-                    </span>
-                  </div>
-                  <h4 style={{ margin: "0.5rem 0", fontSize: "1.1rem" }}>{slot.subject}</h4>
-                  <p style={{ fontSize: "0.9rem", color: "var(--text-muted, #64748b)", margin: "0.25rem 0" }}>
-                    👨‍🏫 {slot.faculty}
-                  </p>
-                  <p style={{ fontSize: "0.85rem", color: "var(--text-muted, #64748b)", margin: "0.25rem 0" }}>
-                    📍 {slot.room}
-                  </p>
-                </div>
-
-                <div style={{ marginTop: "1rem", paddingTop: "0.75rem", borderTop: "1px solid var(--border, #e2e8f0)", display: "flex", gap: "0.5rem" }}>
-                  <button
-                    className="button primary full"
-                    onClick={() => {
-                      if (onNavigateToClass) {
-                        onNavigateToClass(slot.subject, slot.link);
-                      } else {
-                        window.open(slot.link, "_blank");
-                      }
-                    }}
-                    style={{ fontSize: "0.9rem", padding: "0.5rem" }}
-                  >
-                    🎥 Join Live Room
-                  </button>
-                  {canManage && (
-                    <button
-                      className="button secondary"
-                      style={{ color: "var(--danger, #ef4444)", padding: "0.5rem 0.8rem" }}
-                      onClick={() => handleDeleteSlot(slot.id)}
-                      title="Delete Slot"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
         )}
       </div>
 
-      {showModal && (
-        <Modal title="Schedule Class Slot" onClose={() => setShowModal(false)}>
-          <form onSubmit={handleAddSlot} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <div className="field">
-              <label>Day of Week</label>
-              <select className="input" value={form.day} onChange={(e) => setForm({ ...form, day: e.target.value })}>
-                {DAYS.map((d) => (
-                  <option key={d} value={d}>{d}</option>
+      {pending && (
+        <div className="empty-state">
+          <div className="empty-icon">🗓️</div>
+          <h3>Timetable setup pending</h3>
+          <p>Run <code>supabase/migration-academy-suite-v2.sql</code> to enable the timetable.</p>
+        </div>
+      )}
+      {err && <div className="auth-message error">{err}</div>}
+
+      {!pending && (
+        <>
+          <div className="toolbar">
+            <div className="subtab-switch">
+              {DAYS.map((d) => (
+                <button
+                  key={d}
+                  className={day === d ? "subtab active" : "subtab"}
+                  onClick={() => setDay(d)}
+                >
+                  {d.slice(0, 3)}
+                </button>
+              ))}
+            </div>
+            {canManage && (
+              <select
+                className="input"
+                style={{ width: "auto" }}
+                value={batchFilter}
+                onChange={(e) => setBatchFilter(e.target.value)}
+              >
+                <option value="all">All batches</option>
+                {batches.map((b) => (
+                  <option key={b.id} value={b.name}>{b.name}</option>
                 ))}
+              </select>
+            )}
+          </div>
+
+          <div className="table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Subject</th>
+                  <th>Batch</th>
+                  <th>Faculty</th>
+                  <th>Mode</th>
+                  <th></th>
+                  {canManage && <th></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr><td colSpan={canManage ? 7 : 6}>Loading…</td></tr>
+                )}
+                {!loading && visible.length === 0 && (
+                  <tr><td colSpan={canManage ? 7 : 6} className="table-empty">No classes on {day}.</td></tr>
+                )}
+                {visible.map((s) => (
+                  <tr key={s.id} className={s.status === "cancelled" ? "row-muted" : ""}>
+                    <td>{(s.starts_at || "").slice(0, 5)}–{(s.ends_at || "").slice(0, 5)}</td>
+                    <td><strong>{s.subject}</strong></td>
+                    <td><span className="mini-tag">{s.batch_name}</span></td>
+                    <td>{facultyName(s.faculty_id)}</td>
+                    <td>{s.mode === "live" ? "Live" : "In person"}</td>
+                    <td>
+                      {s.status === "cancelled" ? (
+                        <span className="mini-tag warn">Cancelled</span>
+                      ) : s.mode === "live" && s.join_link ? (
+                        <button
+                          className="button secondary small"
+                          onClick={() => onOpenLiveClass?.()}
+                        >
+                          Live Class →
+                        </button>
+                      ) : null}
+                    </td>
+                    {canManage && (
+                      <td className="row-actions">
+                        <button className="button secondary small" onClick={() => openEdit(s)}>Edit</button>
+                        {s.status !== "cancelled" && (
+                          <button className="button ghost small" onClick={() => cancelSlot(s)}>Cancel</button>
+                        )}
+                        <button className="button ghost small danger" onClick={() => removeSlot(s)}>Delete</button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {showForm && (
+        <Modal title={form.id ? "Edit class" : "Schedule class"} onClose={() => setShowForm(false)}>
+          <form className="form-grid" onSubmit={submit}>
+            {err && <div className="form-error-banner">{err}</div>}
+            <div className="field">
+              <label>Batch</label>
+              <select
+                value={form.batch_name}
+                onChange={(e) => setForm({ ...form, batch_name: e.target.value })}
+                required
+              >
+                <option value="">— select —</option>
+                {batches.map((b) => <option key={b.id} value={b.name}>{b.name}</option>)}
               </select>
             </div>
             <div className="field">
-              <label>Subject / Module Name</label>
-              <Input
-                required
-                placeholder="e.g. Full-Stack Web Development"
-                value={form.subject}
-                onChange={(e) => setForm({ ...form, subject: e.target.value })}
-              />
+              <label>Faculty</label>
+              <select
+                value={form.faculty_id}
+                onChange={(e) => setForm({ ...form, faculty_id: e.target.value })}
+              >
+                <option value="">Unassigned</option>
+                {faculty.map((f) => (
+                  <option key={f.id} value={f.id}>{f.full_name || f.email}</option>
+                ))}
+              </select>
+            </div>
+            <Input label="Subject" value={form.subject} onChange={(v) => setForm({ ...form, subject: v })} required />
+            <div className="field">
+              <label>Day</label>
+              <select value={form.day_of_week} onChange={(e) => setForm({ ...form, day_of_week: e.target.value })}>
+                {DAYS.map((d) => <option key={d}>{d}</option>)}
+              </select>
+            </div>
+            <div className="field-row">
+              <Input label="Start" type="time" value={form.starts_at} onChange={(v) => setForm({ ...form, starts_at: v })} required />
+              <Input label="End" type="time" value={form.ends_at} onChange={(v) => setForm({ ...form, ends_at: v })} required />
             </div>
             <div className="field">
-              <label>Time Slot</label>
-              <Input
-                required
-                placeholder="e.g. 10:00 AM - 11:30 AM"
-                value={form.time}
-                onChange={(e) => setForm({ ...form, time: e.target.value })}
-              />
+              <label>Mode</label>
+              <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>
+                {MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
             </div>
-            <div className="field">
-              <label>Batch</label>
-              <Input
-                placeholder="e.g. FSW-2026-A"
-                value={form.batch}
-                onChange={(e) => setForm({ ...form, batch: e.target.value })}
-              />
-            </div>
-            <div className="field">
-              <label>Faculty Name</label>
-              <Input
-                required
-                placeholder="e.g. Prof. Arvind Kumar"
-                value={form.faculty}
-                onChange={(e) => setForm({ ...form, faculty: e.target.value })}
-              />
-            </div>
-            <div className="field">
-              <label>Room / Platform</label>
-              <Input
-                value={form.room}
-                onChange={(e) => setForm({ ...form, room: e.target.value })}
-              />
-            </div>
-            <div className="modal-actions" style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <button type="button" className="button secondary" onClick={() => setShowModal(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="button primary">
-                Save Slot
+            <Input label="Room" value={form.room} onChange={(v) => setForm({ ...form, room: v })} />
+            <Input label="Join link" value={form.join_link} onChange={(v) => setForm({ ...form, join_link: v })} placeholder="https://meet.jit.si/…" />
+            <div className="form-actions">
+              <button type="button" className="button secondary" onClick={() => setShowForm(false)} disabled={saving}>Cancel</button>
+              <button type="submit" className="button primary" disabled={saving}>
+                {saving ? "Saving…" : form.id ? "Save changes" : "Schedule"}
               </button>
             </div>
           </form>
