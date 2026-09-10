@@ -4,6 +4,7 @@ import "./App.css";
 import { useAuth } from "./context/useAuth.js";
 import Login from "./components/Login.jsx";
 import ImportPreviewModal from "./components/ImportPreviewModal.jsx";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import { today } from "./lib/format.js";
 import PeriodFilter from "./components/PeriodFilter.jsx";
 import { resolvePeriod, inRange, periodLabel } from "./lib/period.js";
@@ -1304,6 +1305,8 @@ function AppShell() {
         {dataLoading && <div className="auth-message page-error">Loading data...</div>}
         {dataError && <div className="auth-message error page-error">{dataError}</div>}
 
+        <ErrorBoundary key={activeTab}>
+
         {nav.length === 0 && (
           <div className="page">
             <div className="empty-state">
@@ -1479,6 +1482,8 @@ function AppShell() {
             roleAreas={appSettings.roleAreas}
           />
         )}
+
+        </ErrorBoundary>
       </main>
 
       {importPreview && (
