@@ -5,6 +5,7 @@ import { useAuth } from "./context/useAuth.js";
 import Login from "./components/Login.jsx";
 import ImportPreviewModal from "./components/ImportPreviewModal.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
+import NotificationBell from "./components/NotificationBell.jsx";
 import { today } from "./lib/format.js";
 import PeriodFilter from "./components/PeriodFilter.jsx";
 import { resolvePeriod, inRange, periodLabel } from "./lib/period.js";
@@ -71,11 +72,13 @@ import ExpensesPage from "./pages/ExpensesPage.jsx";
 import BankingPage from "./pages/BankingPage.jsx";
 import ReportsPage from "./pages/ReportsPage.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
-import TimetablePage from "./pages/TimetablePage.jsx";
-import LiveClassPage from "./pages/LiveClassPage.jsx";
-import AssignmentsPage from "./pages/AssignmentsPage.jsx";
-import ExamsPage from "./pages/ExamsPage.jsx";
-import ReviewsPage from "./pages/ReviewsPage.jsx";
+// Academy Suite pages are code-split — they're never the landing tab and
+// pull their own data layer.
+const TimetablePage = React.lazy(() => import("./pages/TimetablePage.jsx"));
+const LiveClassPage = React.lazy(() => import("./pages/LiveClassPage.jsx"));
+const AssignmentsPage = React.lazy(() => import("./pages/AssignmentsPage.jsx"));
+const ExamsPage = React.lazy(() => import("./pages/ExamsPage.jsx"));
+const ReviewsPage = React.lazy(() => import("./pages/ReviewsPage.jsx"));
 import Receipt from "./components/Receipt.jsx";
 
 const HOME = "Pulse"; // dashboard tab name
@@ -1292,6 +1295,7 @@ function AppShell() {
           </div>
           <div className="topbar-right">
             <PeriodFilter period={period} onChange={setPeriod} />
+            <NotificationBell onNavigate={(tab) => access.canOpen(tab) && setActiveTab(tab)} />
             <div className="top-user">
               <span className="top-user-avatar">
                 {(profile.full_name || profile.email || "?").charAt(0).toUpperCase()}
@@ -1305,6 +1309,7 @@ function AppShell() {
         {dataError && <div className="auth-message error page-error">{dataError}</div>}
 
         <ErrorBoundary key={activeTab}>
+        <React.Suspense fallback={<div className="auth-message page-error">Loading…</div>}>
 
         {nav.length === 0 && (
           <div className="page">
@@ -1464,6 +1469,7 @@ function AppShell() {
           />
         )}
 
+        </React.Suspense>
         </ErrorBoundary>
       </main>
 
