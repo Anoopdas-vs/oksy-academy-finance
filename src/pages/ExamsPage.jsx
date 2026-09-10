@@ -12,6 +12,7 @@ import {
   submitExamAttempt,
   fetchExamAttempts,
   fetchMyExamAttempts,
+  fetchExamAnswers,
   notifyBatch,
 } from "../lib/academy.js";
 
@@ -118,11 +119,28 @@ export default function ExamsPage({ access, batches = [] }) {
     if (!qs.length) { alert("This exam has no questions yet."); return; }
     const { row, error } = await startExamAttempt(ex.id, access.userId);
     if (error) { setErr(error.message); return; }
+
+    // Resume: reload any answers already saved for this attempt and work out
+    // the time left from when it originally started.
+    const { rows: saved } = await fetchExamAnswers(row.id);
+    const restored = {};
+    saved.forEach((a) => { if (a.chosen_index != null) restored[a.question_id] = a.chosen_index; });
+
+    const elapsed = row.started_at ? Math.floor((Date.now() - new Date(row.started_at).getTime()) / 1000) : 0;
+    const remaining = ex.duration_minutes * 60 - elapsed;
+
     setAttempt({ attempt: row, exam: ex, questions: qs });
-    setAnswers({});
+    setAnswers(restored);
     setQIdx(0);
     setResult(null);
-    setTimeLeft(ex.duration_minutes * 60);
+    if (remaining <= 0) {
+      setTimeLeft(0);
+      const { row: scored } = await submitExamAttempt(row.id);
+      setResult(scored);
+      load();
+    } else {
+      setTimeLeft(remaining);
+    }
   };
 
   const finish = useCallback(async () => {

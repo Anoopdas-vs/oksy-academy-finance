@@ -5,6 +5,7 @@ import {
   saveTimetableSlot,
   deleteTimetableSlot,
   fetchFacultyProfiles,
+  notifyBatch,
 } from "../lib/academy.js";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -109,6 +110,14 @@ export default function TimetablePage({ access, batches = [], onOpenLiveClass })
       setErr(error.message);
       return;
     }
+    if (form.id) {
+      notifyBatch(payload.batch_name, {
+        type: "timetable",
+        title: `Timetable updated: ${payload.subject}`,
+        body: `${payload.day_of_week} ${payload.starts_at}–${payload.ends_at}`,
+        link: "Timetable",
+      });
+    }
     setShowForm(false);
     load();
   };
@@ -116,6 +125,12 @@ export default function TimetablePage({ access, batches = [], onOpenLiveClass })
   const cancelSlot = async (s) => {
     if (!window.confirm(`Cancel ${s.subject} for ${s.batch_name}?`)) return;
     await saveTimetableSlot({ id: s.id, status: "cancelled" });
+    notifyBatch(s.batch_name, {
+      type: "timetable",
+      title: `Class cancelled: ${s.subject}`,
+      body: `${s.day_of_week} ${(s.starts_at || "").slice(0, 5)}`,
+      link: "Timetable",
+    });
     load();
   };
   const removeSlot = async (s) => {
