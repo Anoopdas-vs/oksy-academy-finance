@@ -28,6 +28,8 @@ const emptyForm = {
   status: "scheduled",
 };
 
+const emptyNotify = { batch_name: "", title: "", body: "" };
+
 export default function TimetablePage({ access, batches = [], onOpenLiveClass }) {
   const canManage = access.isStaffOrAdmin;
   const [slots, setSlots] = useState([]);
@@ -40,6 +42,10 @@ export default function TimetablePage({ access, batches = [], onOpenLiveClass })
   const [form, setForm] = useState(emptyForm);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [notifyForm, setNotifyForm] = useState(emptyNotify);
+  const [showNotify, setShowNotify] = useState(false);
+  const [notifying, setNotifying] = useState(false);
+  const [notifyMsg, setNotifyMsg] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,6 +145,29 @@ export default function TimetablePage({ access, batches = [], onOpenLiveClass })
     load();
   };
 
+  const openNotify = () => {
+    setNotifyForm({ ...emptyNotify, batch_name: batchFilter !== "all" ? batchFilter : batches[0]?.name || "" });
+    setNotifyMsg("");
+    setShowNotify(true);
+  };
+  const sendNotify = async (e) => {
+    e.preventDefault();
+    setNotifying(true);
+    setNotifyMsg("");
+    const { count, error } = await notifyBatch(notifyForm.batch_name, {
+      type: "announcement",
+      title: notifyForm.title.trim(),
+      body: notifyForm.body.trim() || null,
+    });
+    setNotifying(false);
+    if (error) {
+      setNotifyMsg(error.message);
+      return;
+    }
+    setNotifyMsg(`Sent to ${count} student${count === 1 ? "" : "s"} in ${notifyForm.batch_name}.`);
+    setNotifyForm(emptyNotify);
+  };
+
   return (
     <section className="page">
       <div className="page-header">
@@ -151,9 +180,14 @@ export default function TimetablePage({ access, batches = [], onOpenLiveClass })
           </p>
         </div>
         {canManage && !pending && (
-          <button className="button primary" onClick={openCreate}>
-            + Schedule class
-          </button>
+          <div className="row-actions">
+            <button className="button secondary" onClick={openNotify}>
+              📣 Notify batch
+            </button>
+            <button className="button primary" onClick={openCreate}>
+              + Schedule class
+            </button>
+          </div>
         )}
       </div>
 
@@ -301,6 +335,52 @@ export default function TimetablePage({ access, batches = [], onOpenLiveClass })
               <button type="button" className="button secondary" onClick={() => setShowForm(false)} disabled={saving}>Cancel</button>
               <button type="submit" className="button primary" disabled={saving}>
                 {saving ? "Saving…" : form.id ? "Save changes" : "Schedule"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {showNotify && (
+        <Modal title="Notify batch" onClose={() => setShowNotify(false)}>
+          <form className="form-grid" onSubmit={sendNotify}>
+            {notifyMsg && (
+              <div className={notifyMsg.startsWith("Sent") ? "auth-message notice" : "form-error-banner"}>
+                {notifyMsg}
+              </div>
+            )}
+            <div className="field">
+              <label>Batch</label>
+              <select
+                value={notifyForm.batch_name}
+                onChange={(e) => setNotifyForm({ ...notifyForm, batch_name: e.target.value })}
+                required
+              >
+                <option value="">— select —</option>
+                {batches.map((b) => <option key={b.id} value={b.name}>{b.name}</option>)}
+              </select>
+            </div>
+            <Input
+              label="Title"
+              value={notifyForm.title}
+              onChange={(v) => setNotifyForm({ ...notifyForm, title: v })}
+              required
+            />
+            <div className="field">
+              <label>Message (optional)</label>
+              <textarea
+                className="input"
+                rows={3}
+                value={notifyForm.body}
+                onChange={(e) => setNotifyForm({ ...notifyForm, body: e.target.value })}
+              />
+            </div>
+            <div className="form-actions">
+              <button type="button" className="button secondary" onClick={() => setShowNotify(false)} disabled={notifying}>
+                Close
+              </button>
+              <button type="submit" className="button primary" disabled={notifying || !notifyForm.batch_name}>
+                {notifying ? "Sending…" : "Send"}
               </button>
             </div>
           </form>

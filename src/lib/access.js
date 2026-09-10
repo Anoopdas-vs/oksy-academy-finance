@@ -59,6 +59,8 @@ export const DEFAULT_ROLE_AREAS = {
     "Timetable",
     "Live Class",
     "Assignments",
+    "Exams",
+    "Reviews",
     "Enrollment",
     "Fee Collection",
     "Expenses",
