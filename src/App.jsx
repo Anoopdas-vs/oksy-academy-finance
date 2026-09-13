@@ -461,26 +461,18 @@ function AppShell() {
     const healthcareLiability = Math.max(0, -healthcareBalance);
     const netInterCompany = -healthcareBalance;
 
-    // Net P&L: Revenue − Expense − this period's Healthcare-paid expenses.
-    // Deliberate design choice (confirmed with the owner): a Healthcare-paid
-    // expense already sits inside totalExpense (it sums every expense row
-    // regardless of account), so subtracting it again here IS a genuine
-    // double-count of that expense — but it's an intentional, conservative
-    // one: until the Academy actually repays Healthcare, that money is
-    // treated as not yet "earned" profit. "Due to Healthcare" (below) still
-    // shows the same figure on its own as the running balance owed.
-    //
-    // This subtracts only the CURRENT PERIOD's Healthcare-paid expenses
-    // (periodHealthcareExpense, scoped like totalRevenue/totalExpense) —
-    // not the all-time healthcareLiability balance. Using the all-time
-    // balance here would drag every period's P&L down by the full
-    // historical balance regardless of that period's own activity, and
-    // spike it back up the period the balance finally gets repaid (a
-    // transfer, which is never itself a P&L flow). See the engineering
-    // review, finding C1, and the follow-up discussion that kept this
-    // subtraction but fixed its period-scoping.
-    const periodHealthcareExpense = sumByAccount(visibleExpenses, "Healthcare");
-    const netProfit = totalRevenue - totalExpense - periodHealthcareExpense;
+    // Net P&L: Revenue − Expense − Due to Healthcare (healthcareLiability).
+    // Deliberate design choice, confirmed directly with the owner: subtract
+    // the actual "Due to Healthcare" figure shown on its own tile below,
+    // exactly as it reads there — not a period-scoped version of it. A
+    // Healthcare-paid expense already sits inside totalExpense too, so this
+    // is a known, intentional double-count: until the Academy actually
+    // repays Healthcare, that money is treated as not yet "earned" profit,
+    // full stop, regardless of which period you're viewing. (An earlier
+    // pass here tried period-scoping this subtraction instead — that
+    // produced a different number than the visible "Due to Healthcare"
+    // tile, which was confusing and not what was wanted. Reverted.)
+    const netProfit = totalRevenue - totalExpense - healthcareLiability;
 
     return {
       totalStudents,
