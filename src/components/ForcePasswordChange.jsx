@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useAuth } from "../context/AuthContext.jsx";
+import { useAuth } from "../context/useAuth.js";
 
 // Shown instead of the main app whenever profile.must_change_password is
 // true — i.e. this login still has the temp password a super-admin set for
