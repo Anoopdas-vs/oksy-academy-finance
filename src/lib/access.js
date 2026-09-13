@@ -14,6 +14,9 @@ export const ROLE_LABEL = {
 };
 
 // Roles that can be assigned from the app (Owner is set in the database only).
+// student/faculty/professional now have real screens (the Academy Suite:
+// Timetable, Live Class, Assignments, Exams, Reviews — see DEFAULT_ROLE_AREAS
+// below), so they're assignable like any other role.
 export const ASSIGNABLE_ROLES = ["admin", "staff", "student", "faculty", "professional"];
 
 // Roles whose area access the Owner configures in Admin → Access.

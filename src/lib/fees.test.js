@@ -1,155 +1,195 @@
-import { describe, it } from "node:test";
+// Unit tests for the canonical fee math in fees.js — see finding M4 in the
+// engineering review. Uses Node's built-in test runner (node:test), so
+// `npm test` needs no extra dependency and nothing to install.
+//
+// Run directly with: node --test src/lib
+import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   grossFee,
   feeAfterWaiver,
   effectiveFeeDue,
   outstanding,
+  creditBalance,
   waiverForDrop,
   sumByAccount,
   accountBalance,
   studentFeeTotals,
 } from "./fees.js";
 
-describe("grossFee", () => {
-  it("sums all fee components accurately", () => {
-    const student = {
-      registration_fee: 1000,
-      course_fee: 15000,
-      exam_fee: 500,
-      other_fee: 250,
-    };
-    assert.equal(grossFee(student), 16750);
+const student = (over = {}) => ({
+  id: "S1",
+  registration_fee: 1000,
+  course_fee: 20000,
+  exam_fee: 2000,
+  other_fee: 0,
+  waiver: 0,
+  status: "Active",
+  ...over,
+});
+
+describe("grossFee / feeAfterWaiver", () => {
+  test("sums all four fee components", () => {
+    assert.equal(grossFee(student()), 23000);
   });
 
-  it("handles missing or string fee components", () => {
-    const student = {
-      course_fee: "20000",
-    };
-    assert.equal(grossFee(student), 20000);
-  });
-
-  it("returns 0 for empty student object", () => {
+  test("treats missing fee fields as zero", () => {
     assert.equal(grossFee({}), 0);
   });
-});
 
-describe("feeAfterWaiver", () => {
-  it("subtracts waiver from gross fee", () => {
-    const student = {
-      course_fee: 25000,
-      waiver: 5000,
-    };
-    assert.equal(feeAfterWaiver(student), 20000);
-  });
-
-  it("handles zero or undefined waiver", () => {
-    const student = { course_fee: 10000 };
-    assert.equal(feeAfterWaiver(student), 10000);
+  test("subtracts the recorded waiver", () => {
+    assert.equal(feeAfterWaiver(student({ waiver: 5000 })), 18000);
   });
 });
 
-describe("effectiveFeeDue and outstanding", () => {
-  it("calculates active student fee due and outstanding", () => {
-    const student = { course_fee: 30000, waiver: 5000, status: "Active" };
-    assert.equal(effectiveFeeDue(student, 10000), 25000);
-    assert.equal(outstanding(student, 10000), 15000);
+describe("effectiveFeeDue", () => {
+  test("an Active student owes the full amount after waiver regardless of what they've paid", () => {
+    assert.equal(effectiveFeeDue(student(), 0), 23000);
+    assert.equal(effectiveFeeDue(student(), 10000), 23000);
   });
 
-  it("zeros outstanding balance for Dropped students by treating uncollected as waived", () => {
-    const droppedStudent = { course_fee: 30000, waiver: 5000, status: "Dropped" };
-    // Paid only 10,000 so far
-    assert.equal(effectiveFeeDue(droppedStudent, 10000), 10000);
-    assert.equal(outstanding(droppedStudent, 10000), 0);
+  test("a Dropped student's uncollected balance is treated as waived — they owe only what they paid", () => {
+    const s = student({ status: "Dropped" });
+    assert.equal(effectiveFeeDue(s, 5000), 5000);
   });
 
-  it("handles dropped student who paid nothing", () => {
-    const droppedStudent = { course_fee: 20000, status: "Dropped" };
-    assert.equal(effectiveFeeDue(droppedStudent, 0), 0);
-    assert.equal(outstanding(droppedStudent, 0), 0);
+  test("a Dropped student who already paid in full still owes the full (waived) amount, not more", () => {
+    const s = student({ status: "Dropped" });
+    assert.equal(effectiveFeeDue(s, 23000), 23000);
+    assert.equal(effectiveFeeDue(s, 30000), 23000); // overpaid — due is still capped at the gross/waived fee
+  });
+});
+
+describe("outstanding — the clamp that must never go negative", () => {
+  test("is the positive gap between fee due and what's been collected", () => {
+    assert.equal(outstanding(student(), 10000), 13000);
   });
 
-  it("never returns negative outstanding when student overpays", () => {
-    const student = { course_fee: 10000, status: "Active" };
-    assert.equal(outstanding(student, 15000), 0);
+  test("clamps to 0 rather than going negative when overpaid", () => {
+    assert.equal(outstanding(student(), 30000), 0);
+  });
+
+  test("is 0 exactly at full payment", () => {
+    assert.equal(outstanding(student(), 23000), 0);
+  });
+
+  test("a Dropped student with any payment recorded has zero outstanding", () => {
+    const s = student({ status: "Dropped" });
+    assert.equal(outstanding(s, 500), 0);
+  });
+});
+
+describe("creditBalance — the flip side of outstanding(), display-only", () => {
+  test("is 0 whenever outstanding() is positive (never both nonzero at once)", () => {
+    const collected = 10000;
+    assert.ok(outstanding(student(), collected) > 0);
+    assert.equal(creditBalance(student(), collected), 0);
+  });
+
+  test("is the positive overpayment amount when collected exceeds what's due", () => {
+    assert.equal(creditBalance(student(), 30000), 7000);
+  });
+
+  test("is 0 exactly at full payment — not a false positive at the boundary", () => {
+    assert.equal(creditBalance(student(), 23000), 0);
+  });
+
+  test("a Dropped student shows no credit as long as they paid no more than the gross (waived) fee", () => {
+    // effectiveFeeDue() for a Dropped student is min(feeAfterWaiver, collected)
+    // — it tracks whatever they paid, up to a ceiling of the gross/waived
+    // fee. Below that ceiling collected === effectiveFeeDue, so credit is 0.
+    const s = student({ status: "Dropped" }); // gross 23000
+    assert.equal(creditBalance(s, 10000), 0);
+    assert.equal(creditBalance(s, 23000), 0); // exactly at the ceiling
+  });
+
+  test("a Dropped student who paid MORE than the gross/waived fee still shows the excess as credit", () => {
+    // Once collected passes the ceiling, effectiveFeeDue stays capped at the
+    // gross/waived fee, so the excess is a genuine overpayment signal — the
+    // Dropped status doesn't swallow it.
+    const s = student({ status: "Dropped" }); // gross 23000
+    assert.equal(creditBalance(s, 30000), 7000);
   });
 });
 
 describe("waiverForDrop", () => {
-  it("calculates waiver to zero out balance upon drop", () => {
-    const student = { course_fee: 40000, waiver: 5000 };
-    const collected = 15000;
-    // Gross = 40000, Gap = 40000 - 15000 = 25000. New waiver = max(5000, 25000) = 25000
-    assert.equal(waiverForDrop(student, collected), 25000);
+  test("raises the waiver just enough to zero the remaining balance", () => {
+    // gross 23000, collected 18000 -> gap 5000 -> new waiver 5000
+    assert.equal(waiverForDrop(student(), 18000), 5000);
   });
 
-  it("never lowers existing waiver", () => {
-    const student = { course_fee: 40000, waiver: 30000 };
-    const collected = 35000;
-    // Gap = 40000 - 35000 = 5000. New waiver = max(30000, 5000) = 30000
-    assert.equal(waiverForDrop(student, collected), 30000);
+  test("never lowers an existing waiver even if the gap is smaller", () => {
+    const s = student({ waiver: 8000 });
+    // gross 23000, collected 18000 -> gap 5000, but existing waiver 8000 wins
+    assert.equal(waiverForDrop(s, 18000), 8000);
+  });
+
+  test("is 0 when the student has already paid the full gross fee", () => {
+    assert.equal(waiverForDrop(student(), 23000), 0);
   });
 });
 
 describe("sumByAccount", () => {
   const rows = [
-    { account: "HDFC Bank", amount: 5000 },
-    { account: "Cash", amount: 1500 },
-    { account: "HDFC Bank", amount: 3500 },
+    { account: "HDFC", amount: 100 },
+    { account: "Cash", amount: 50 },
+    { account: "HDFC", amount: 25 },
   ];
 
-  it("sums rows for a specific account", () => {
-    assert.equal(sumByAccount(rows, "HDFC Bank"), 8500);
-    assert.equal(sumByAccount(rows, "Cash"), 1500);
+  test("sums only the matching account", () => {
+    assert.equal(sumByAccount(rows, "HDFC"), 125);
   });
 
-  it("sums all rows when account is '*'", () => {
-    assert.equal(sumByAccount(rows, "*"), 10000);
+  test("'*' sums every row regardless of account", () => {
+    assert.equal(sumByAccount(rows, "*"), 175);
+  });
+
+  test("an account with no rows sums to 0", () => {
+    assert.equal(sumByAccount(rows, "ICICI"), 0);
   });
 });
 
-describe("accountBalance", () => {
-  it("calculates independent running balance including transfers", () => {
+describe("accountBalance — pure cash movement, never P&L", () => {
+  test("collections in, expenses out, transfers both ways", () => {
     const data = {
-      collections: [
-        { account: "Federal Bank", amount: 50000 },
-        { account: "Cash", amount: 10000 },
-      ],
-      expenses: [
-        { account: "Federal Bank", amount: 12000 },
-        { account: "Cash", amount: 3000 },
-      ],
+      collections: [{ account: "HDFC", amount: 1000 }],
+      expenses: [{ account: "HDFC", amount: 200 }],
       transfers: [
-        { from_account: "Cash", to_account: "Federal Bank", amount: 5000 },
+        { from_account: "HDFC", to_account: "Cash", amount: 100 },
+        { from_account: "Cash", to_account: "HDFC", amount: 50 },
       ],
     };
+    // 1000 - 200 - 100(out) + 50(in) = 750
+    assert.equal(accountBalance("HDFC", data), 750);
+  });
 
-    // Federal Bank: 50000 (in) - 12000 (out) + 5000 (transferred in) = 43000
-    assert.equal(accountBalance("Federal Bank", data), 43000);
-    // Cash: 10000 (in) - 3000 (out) - 5000 (transferred out) = 2000
-    assert.equal(accountBalance("Cash", data), 2000);
+  test("missing arrays default to empty rather than throwing", () => {
+    assert.equal(accountBalance("HDFC", {}), 0);
   });
 });
 
-describe("studentFeeTotals", () => {
-  it("aggregates expected, collected, and outstanding across multiple students", () => {
-    const students = [
-      { id: "s1", course_fee: 20000, waiver: 2000, status: "Active" }, // due 18000
-      { id: "s2", course_fee: 30000, waiver: 0, status: "Dropped" },   // dropped, paid 10000 -> due 10000
-      { id: "s3", course_fee: 15000, waiver: 0, status: "Active" },    // due 15000, paid 15000 -> out 0
-    ];
+describe("studentFeeTotals — per-student and fleet-wide position", () => {
+  test("aggregates expected/collected/outstanding across students and matches the per-student math", () => {
+    const students = [student({ id: "S1" }), student({ id: "S2", waiver: 3000 })];
     const collections = [
-      { student_id: "s1", amount: 8000 },
-      { student_id: "s2", amount: 10000 },
-      { student_id: "s3", amount: 15000 },
+      { student_id: "S1", amount: 10000 },
+      { student_id: "S2", amount: 20000 },
     ];
+    const { expected, collected, outstanding: out, byStudent } = studentFeeTotals(students, collections);
 
-    const result = studentFeeTotals(students, collections);
-    assert.equal(result.collected, 33000);
-    assert.equal(result.expected, 18000 + 10000 + 15000); // 43000
-    assert.equal(result.outstanding, 10000); // s1 has 18000 - 8000 = 10000; s2 has 0; s3 has 0
-    assert.equal(result.byStudent["s1"].outstanding, 10000);
-    assert.equal(result.byStudent["s2"].outstanding, 0);
-    assert.equal(result.byStudent["s3"].outstanding, 0);
+    assert.equal(byStudent.S1.expected, 23000);
+    assert.equal(byStudent.S1.outstanding, 13000);
+    assert.equal(byStudent.S2.expected, 20000); // 23000 - 3000 waiver
+    assert.equal(byStudent.S2.outstanding, 0); // paid exactly what's due
+
+    assert.equal(collected, 30000);
+    assert.equal(expected, 43000);
+    assert.equal(out, 13000);
+  });
+
+  test("a student with no collections at all owes the full expected amount", () => {
+    const { byStudent } = studentFeeTotals([student({ id: "S3" })], []);
+    assert.equal(byStudent.S3.collected, 0);
+    assert.equal(byStudent.S3.outstanding, 23000);
   });
 });

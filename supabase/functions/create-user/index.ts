@@ -43,15 +43,24 @@ Deno.serve(async (req) => {
       .select("role, is_approved")
       .eq("id", userData.user.id)
       .single();
-    if (!profile || !["admin", "super_admin"].includes(profile.role) || !profile.is_approved) {
-      return json({ error: "Admins only." }, 403);
+    // Only the Owner (super_admin) creates logins — matches the app's own
+    // access model (src/lib/access.js: manageUsers: isSuperAdmin), which
+    // hides "Create Login" from plain admins. This check used to also
+    // accept role === "admin", which let any operational admin mint a new
+    // admin-level login by calling this function directly (bypassing the
+    // UI restriction entirely) — see the engineering review, finding C3.
+    if (!profile || profile.role !== "super_admin" || !profile.is_approved) {
+      return json({ error: "Only the Owner (super admin) can create logins." }, 403);
     }
 
     const body = await req.json();
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
     const fullName = String(body.full_name || "").trim();
-    const ASSIGNABLE = ["admin", "staff", "student", "faculty", "professional"];
+    // Kept in sync with ASSIGNABLE_ROLES in src/lib/access.js — student/
+    // faculty/professional have no permissions or screens today, so this
+    // function won't create a dead-end login for them either.
+    const ASSIGNABLE = ["admin", "staff"];
     const role = ASSIGNABLE.includes(body.role) ? body.role : "staff";
     const canView = role === "admin" ? true : Boolean(body.can_view_financials);
     const approved = body.is_approved !== false;
@@ -73,7 +82,10 @@ Deno.serve(async (req) => {
     if (createErr) return json({ error: createErr.message }, 400);
 
     // The handle_new_user trigger has already inserted a profile row; set its
-    // role / approval / access here.
+    // role / approval / access here. must_change_password: true forces this
+    // person through the password-change screen on their first sign-in,
+    // since `password` above is a temp password the super-admin just set and
+    // is handing them out-of-band — see the engineering review, finding M6.
     const { error: profErr } = await admin
       .from("profiles")
       .update({
@@ -81,6 +93,7 @@ Deno.serve(async (req) => {
         role,
         is_approved: approved,
         can_view_financials: canView,
+        must_change_password: true,
       })
       .eq("id", created.user.id);
     if (profErr) return json({ error: profErr.message }, 400);
