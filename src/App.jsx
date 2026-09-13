@@ -461,18 +461,26 @@ function AppShell() {
     const healthcareLiability = Math.max(0, -healthcareBalance);
     const netInterCompany = -healthcareBalance;
 
-    // Net P&L is a plain income-statement figure: Revenue − Expense.
-    // Expenses paid by Healthcare on the Academy's behalf are already
-    // included in totalExpense (it sums every expense row regardless of
-    // account), so they must NOT also be subtracted again via
-    // healthcareLiability here — "Due to Healthcare" is a balance-sheet
-    // figure (its own tile) about who owes whom, not a second expense.
-    // (This used to be `totalRevenue - totalExpense - healthcareLiability`,
-    // which double-counted Healthcare-paid expenses and — since
-    // healthcareLiability is derived from the all-time `bal()` above while
-    // totalRevenue/totalExpense are period-scoped — also mixed an all-time
-    // balance into a period figure. See the engineering review, finding C1.)
-    const netProfit = totalRevenue - totalExpense;
+    // Net P&L: Revenue − Expense − this period's Healthcare-paid expenses.
+    // Deliberate design choice (confirmed with the owner): a Healthcare-paid
+    // expense already sits inside totalExpense (it sums every expense row
+    // regardless of account), so subtracting it again here IS a genuine
+    // double-count of that expense — but it's an intentional, conservative
+    // one: until the Academy actually repays Healthcare, that money is
+    // treated as not yet "earned" profit. "Due to Healthcare" (below) still
+    // shows the same figure on its own as the running balance owed.
+    //
+    // This subtracts only the CURRENT PERIOD's Healthcare-paid expenses
+    // (periodHealthcareExpense, scoped like totalRevenue/totalExpense) —
+    // not the all-time healthcareLiability balance. Using the all-time
+    // balance here would drag every period's P&L down by the full
+    // historical balance regardless of that period's own activity, and
+    // spike it back up the period the balance finally gets repaid (a
+    // transfer, which is never itself a P&L flow). See the engineering
+    // review, finding C1, and the follow-up discussion that kept this
+    // subtraction but fixed its period-scoping.
+    const periodHealthcareExpense = sumByAccount(visibleExpenses, "Healthcare");
+    const netProfit = totalRevenue - totalExpense - periodHealthcareExpense;
 
     return {
       totalStudents,

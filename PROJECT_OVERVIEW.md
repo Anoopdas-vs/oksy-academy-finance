@@ -347,10 +347,18 @@ branch:
   `08_drop_income_table.sql`. If it held any rows in your project, export
   them before running that file; the file itself only checks and warns.)
 - **Net P&L** = `Revenue − Expense − Due to Healthcare`, but `Total Expense`
-  already included Healthcare-paid expenses, so those costs were subtracted
-  twice — and the Healthcare term used an all-time balance inside a
-  period-scoped subtraction. **(fixed:** Net P&L is now `Revenue − Expense`;
-  "Due to Healthcare" stays its own balance-sheet tile.)
+  already included Healthcare-paid expenses (so those costs were counted
+  twice), and the Healthcare term used an all-time balance inside a
+  period-scoped subtraction (so every period's P&L was dragged down by the
+  *entire* historical balance, not that period's own activity). **Confirmed
+  with the owner that the double-count itself is intentional** — Healthcare-
+  paid expenses are deliberately subtracted a second time as a conservative
+  "not yet real profit until repaid" stance. **(fixed:** only the
+  period-scoping bug — Net P&L is now `Revenue − Expense −
+  periodHealthcareExpense`, where the last term is *this period's*
+  Healthcare-paid expenses only, not the all-time `Due to Healthcare`
+  balance. "Due to Healthcare" still shows the all-time balance on its own
+  tile.)
 - Roles `student` / `faculty` / `professional` now default (via
   `DEFAULT_ROLE_AREAS` in `access.js`) to the Academy Suite tabs
   (Pulse + Timetable / Live Class / Assignments / Exams / Reviews) with a

@@ -256,7 +256,7 @@ function ExecutiveDashboard({
                 icon="📈"
                 accent={totals.netProfit >= 0 ? "green" : "red"}
                 valueTone={totals.netProfit >= 0 ? "pos" : "neg"}
-                caption="Revenue − Expense"
+                caption="Revenue − Expense − Healthcare-paid expenses (this period)"
               />
               <StatTile label="Outstanding Student Fees" value={formatMoney(totals.studentReceivable)} icon="📄" accent="blue" caption="Amount still to be collected" />
               <StatTile
