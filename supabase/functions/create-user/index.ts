@@ -58,9 +58,9 @@ Deno.serve(async (req) => {
     const password = String(body.password || "");
     const fullName = String(body.full_name || "").trim();
     // Kept in sync with ASSIGNABLE_ROLES in src/lib/access.js — student/
-    // faculty/professional have no permissions or screens today, so this
-    // function won't create a dead-end login for them either.
-    const ASSIGNABLE = ["admin", "staff"];
+    // faculty/professional have real screens under the Academy Suite (see
+    // DEFAULT_ROLE_AREAS there), so they're assignable here too.
+    const ASSIGNABLE = ["admin", "staff", "student", "faculty", "professional"];
     const role = ASSIGNABLE.includes(body.role) ? body.role : "staff";
     const canView = role === "admin" ? true : Boolean(body.can_view_financials);
     const approved = body.is_approved !== false;
