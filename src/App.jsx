@@ -3,6 +3,7 @@ import "./App.css";
 
 import { useAuth } from "./context/useAuth.js";
 import Login from "./components/Login.jsx";
+import ForcePasswordChange from "./components/ForcePasswordChange.jsx";
 import ImportPreviewModal from "./components/ImportPreviewModal.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import NotificationBell from "./components/NotificationBell.jsx";
@@ -144,6 +145,12 @@ export default function App() {
         action={{ label: "Sign out", onClick: signOut }}
       />
     );
+  }
+
+  // Logins provisioned via "Create Login" start with an admin-set temp
+  // password — require a real one before letting them into the app.
+  if (profile.must_change_password) {
+    return <ForcePasswordChange />;
   }
 
   return <AppShell />;
@@ -339,7 +346,7 @@ function AppShell() {
       const [studentRows, collectionRows, batchRows, expenseRows, categoryRows, settings] =
         await Promise.all([
           fetchStudents(),
-          needCollections ? fetchCollections(canViewFinancials).catch(() => []) : Promise.resolve([]),
+          needCollections ? fetchCollections().catch(() => []) : Promise.resolve([]),
           fetchBatches().catch(() => []),
           needExpenses ? fetchExpenses().catch(() => []) : Promise.resolve([]),
           needExpenses ? fetchExpenseCategories().catch(() => []) : Promise.resolve([]),
@@ -454,8 +461,17 @@ function AppShell() {
     const healthcareLiability = Math.max(0, -healthcareBalance);
     const netInterCompany = -healthcareBalance;
 
-    // Net P&L (per the academy's definition):
-    //   Total Revenue − Total Expense − Total Due (to Healthcare)
+    // Net P&L: Revenue − Expense − Due to Healthcare (healthcareLiability).
+    // Deliberate design choice, confirmed directly with the owner: subtract
+    // the actual "Due to Healthcare" figure shown on its own tile below,
+    // exactly as it reads there — not a period-scoped version of it. A
+    // Healthcare-paid expense already sits inside totalExpense too, so this
+    // is a known, intentional double-count: until the Academy actually
+    // repays Healthcare, that money is treated as not yet "earned" profit,
+    // full stop, regardless of which period you're viewing. (An earlier
+    // pass here tried period-scoping this subtraction instead — that
+    // produced a different number than the visible "Due to Healthcare"
+    // tile, which was confusing and not what was wanted. Reverted.)
     const netProfit = totalRevenue - totalExpense - healthcareLiability;
 
     return {

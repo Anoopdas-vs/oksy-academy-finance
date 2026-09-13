@@ -1,7 +1,10 @@
 import React from "react";
 
-// Catches render/runtime errors in a page so one broken tab shows a
-// recoverable message instead of white-screening the whole portal.
+// Top-level safety net: without this, a single uncaught render error
+// (a malformed record, an unexpected null field, a chart-library edge
+// case) blanks the entire screen for that user with no way back except a
+// manual reload — in an app whose whole job is letting staff record money.
+// See the engineering review, finding H2.
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -13,26 +16,34 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    // Keep a console trail for debugging; no external reporting yet.
-    console.error("Page error:", error, info?.componentStack);
+    // eslint-disable-next-line no-console
+    console.error("Unhandled error in the app:", error, info?.componentStack);
   }
 
   render() {
-    if (!this.state.error) return this.props.children;
-    return (
-      <div className="page">
-        <div className="empty-state">
-          <div className="empty-icon">⚠️</div>
-          <h3>This section hit an error</h3>
-          <p>{String(this.state.error?.message || this.state.error)}</p>
-          <button
-            className="button primary"
-            onClick={() => this.setState({ error: null })}
-          >
-            Try again
-          </button>
+    if (this.state.error) {
+      return (
+        <div className="auth-shell">
+          <div className="auth-card status-card">
+            <h2>Something went wrong</h2>
+            <p>
+              The app hit an unexpected error and had to stop to avoid showing you
+              anything unreliable. Nothing you had already saved is affected.
+            </p>
+            <p className="table-sub">{String(this.state.error?.message || this.state.error)}</p>
+            <button
+              className="button primary"
+              onClick={() => {
+                this.setState({ error: null });
+                window.location.reload();
+              }}
+            >
+              Reload
+            </button>
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
+    return this.props.children;
   }
 }

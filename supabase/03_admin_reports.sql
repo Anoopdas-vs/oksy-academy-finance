@@ -1,8 +1,13 @@
 -- ============================================================
--- Migration: Admin tab (batches, expense categories) + expense/transfer
---            edit & delete
+-- Migration 03: Admin tab (batches, expense categories) + expense/transfer
+--               edit & delete
 -- ============================================================
--- Run ONCE in the Supabase SQL Editor, after the earlier migrations.
+-- Run ONCE in the Supabase SQL Editor, after 01_healthcare_account.sql and
+-- 02_transfers_reconciliation.sql — this migration adds a delete policy on
+-- public.transfers, which 02 is what creates that table.
+--
+-- Must run BEFORE 04_staff_access.sql — that migration edits policies on
+-- the public.batches and public.expense_categories tables created here.
 -- ------------------------------------------------------------
 
 begin;

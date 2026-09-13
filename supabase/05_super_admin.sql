@@ -1,7 +1,9 @@
 -- ============================================================
--- Migration: Super Admin role + configurable access areas
+-- Migration 05: Super Admin role + configurable access areas
 -- ============================================================
--- Run ONCE in the Supabase SQL Editor, after the earlier migrations.
+-- Run ONCE in the Supabase SQL Editor, last (no other migration depends on
+-- this one, but this one doesn't depend on 03/04 either — it only touches
+-- profiles, collections and app_settings).
 --
 --   super_admin  → everything, incl. user management & access config
 --   admin        → operational everything (add / edit / delete records,
@@ -43,6 +45,7 @@ $$;
 
 -- 3. only the super admin manages user roles / approval / access
 drop policy if exists "profiles_admin_update_all" on public.profiles;
+drop policy if exists "profiles_super_admin_update_all" on public.profiles;
 create policy "profiles_super_admin_update_all" on public.profiles
   for update using (public.is_super_admin()) with check (public.is_super_admin());
 

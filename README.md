@@ -40,17 +40,37 @@ Scripts: `npm run dev` · `npm run build` · `npm run preview` ·
 ## Database
 
 The schema lives in `supabase/`. On a **fresh** Supabase project, run
-`supabase/schema.sql` in the SQL editor — it now includes the Academy Suite
-tables. On an **existing** project, apply the `supabase/migration-*.sql`
-files **in filename order** — they are hand-run patches, there is no
-migration runner.
+`supabase/schema.sql` in the SQL editor — it already contains the full
+current schema, including the Academy Suite tables (Timetable, Assignments,
+Exams, Reviews) and the audit log, so a new project never needs the
+migration files at all.
+
+On an **existing** project that predates `schema.sql`'s current state,
+apply the `supabase/NN_*.sql` files **in numeric filename order** (`01`,
+`02`, `03`, ...) — the number *is* the required run order (some of them
+depend on tables an earlier one creates); they are hand-run patches, there
+is no migration runner. Before applying any of them, run the check in
+PROJECT_OVERVIEW.md §8 to see which ones, if any, your project still needs.
 
 The `create-user` Edge Function (`supabase/functions/create-user/`) lets a
-super-admin create logins; it needs the `SERVICE_ROLE_KEY` secret set in
-Supabase.
+super-admin create logins. `.github/workflows/deploy-edge-functions.yml`
+deploys it automatically on push (see that file for the one-time repo
+secrets it needs); it still needs the `SERVICE_ROLE_KEY` secret set in
+Supabase itself once, which the workflow deliberately doesn't do for you.
 
 ⚠ The production database is live. Propose schema changes as SQL; don't run
 them automatically.
+
+---
+
+## Backups
+
+`scripts/backup-db.sh`, run nightly by `.github/workflows/nightly-backup.yml`,
+takes an independent `pg_dump` of the database so there's a restore path that
+doesn't depend on Supabase's own backups (which are plan-limited and live
+inside Supabase itself). See the script's header comment and
+**[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)**'s "Backups" section for setup
+(which GitHub secrets to add) and how to restore from a dump.
 
 ---
 
@@ -77,5 +97,6 @@ src/
                      templates.js, validation.js, usePagedList.js
                      + fees.test.js, reconcile.test.js
   context/           AuthContext.jsx (provider) + authContext.js + useAuth.js
-supabase/            schema.sql, migration-*.sql (×6), functions/create-user
+supabase/            schema.sql, NN_*.sql (hand-run patches), functions/create-user
+scripts/             backup-db.sh (nightly off-platform DB backup)
 ```

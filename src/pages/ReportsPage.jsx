@@ -109,6 +109,9 @@ function ReportView({ report, data, range, periodLabel, onBack }) {
           <h3>OKSY ACADEMY LLP — {report.name}</h3>
           <p>Period: {periodLabel} · Generated {new Date().toLocaleDateString("en-IN")}</p>
           {result.summary && <p className="report-summary">{result.summary}</p>}
+          <p className="report-rounding-note">
+            Amounts are rounded to the nearest ₹ for display; underlying records keep full paisa precision.
+          </p>
         </div>
         <table>
           <thead>
