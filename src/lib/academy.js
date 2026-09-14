@@ -120,25 +120,40 @@ export async function fetchSubmissions(assignmentIds) {
   return { rows: data || [], error: soft(error) };
 }
 
+// First submission is a direct insert (governed by the "sub_student_insert"
+// RLS policy). Resubmitting an existing, not-yet-graded row goes through the
+// "resubmit_assignment" RPC instead of a direct update — students no longer
+// hold an UPDATE grant on assignment_submissions at all (see
+// supabase/11_assignment_resubmit_guard.sql), so a raw conflict-triggered
+// upsert can't work here; the unique-violation on retry is what selects the
+// RPC path.
 export async function submitAssignment(assignmentId, studentId, { link, notes, isLate, filePath }) {
   const { data, error } = await supabase
     .from("assignment_submissions")
-    .upsert(
-      {
-        assignment_id: assignmentId,
-        student_id: studentId,
-        link,
-        notes,
-        file_path: filePath ?? null,
-        is_late: !!isLate,
-        submitted_at: new Date().toISOString(),
-        status: "submitted",
-      },
-      { onConflict: "assignment_id,student_id" }
-    )
+    .insert({
+      assignment_id: assignmentId,
+      student_id: studentId,
+      link,
+      notes,
+      file_path: filePath ?? null,
+      is_late: !!isLate,
+      submitted_at: new Date().toISOString(),
+      status: "submitted",
+    })
     .select()
     .single();
-  return { row: data, error: soft(error) };
+
+  if (!error) return { row: data, error: null };
+  if (error.code !== "23505") return { row: null, error: soft(error) };
+
+  const { data: rpcRow, error: rpcError } = await supabase.rpc("resubmit_assignment", {
+    p_assignment_id: assignmentId,
+    p_link: link,
+    p_notes: notes,
+    p_file_path: filePath ?? null,
+    p_is_late: !!isLate,
+  });
+  return { row: rpcRow, error: soft(rpcError) };
 }
 
 // Upload a submission file to the private `submissions` bucket. Returns its
