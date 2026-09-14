@@ -1,6 +1,12 @@
 -- ============================================================
--- Migration 19: add missing FK constraints (Step 12 cleanliness)
+-- Migration 19: add missing FK constraints (Step 12 cleanliness) -- APPLIED
 -- ============================================================
+-- STATUS: applied to production 2026-09-14, after running the pre-checks
+-- below found real orphaned data, which was resolved first via
+-- 19a_backfill_missing_batches.sql (5 batch names, 86 students affected)
+-- and 19b_backfill_missing_expense_categories.sql (25 category names).
+-- Run 19a and 19b before this file on any other environment that has the
+-- same historical free-text data.
 -- Background (Step 4 database schema audit, confirmed again in Step 12):
 -- `students.batch` (free text) and `expenses.category` (free text) are
 -- meant to reference `batches.name` and `expense_categories.name`
