@@ -2,8 +2,15 @@
 // bulk-import screen in the app.
 
 // Maps the raw error text Postgres/Supabase sends back into plain
-// language a non-technical staff member can understand.
+// language a non-technical staff member can understand. Every call site
+// already catches and displays the string this returns, but until now
+// nothing left a trace of the original error anywhere — logging it here
+// (the one place nearly every catch block in the app funnels through)
+// gives the browser console a record to check without touching every
+// call site individually.
 export function friendlyError(err) {
+  // eslint-disable-next-line no-console
+  console.error("[friendlyError]", err);
   const msg = (err && err.message) || String(err || "");
 
   if (/invalid input syntax for type date/i.test(msg)) {
