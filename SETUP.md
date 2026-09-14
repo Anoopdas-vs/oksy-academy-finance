@@ -1,6 +1,6 @@
-# Oksy Academy Portal — Setup & Deployment (Zero Cost)
+# Oksy Academy Pulse — Setup & Deployment (Zero Cost)
 
-The portal has real logins, role-based permissions and a shared cloud
+The platform has real logins, role-based permissions and a shared cloud
 database on **Supabase's free tier**. Nothing here needs a card.
 
 Stack: React 19 + Vite 8 (Node ≥ 20.19) · Supabase (Postgres + Auth + RLS) ·
@@ -16,7 +16,7 @@ npm install
 ## 1. Create a free Supabase project
 
 1. Go to https://supabase.com and sign up (GitHub login is fastest).
-2. Click **New Project**. Name it `oksy-academy`, set a database password
+2. Click **New Project**. Name it `oksy-academy-pulse`, set a database password
    (save it), pick the region closest to Kerala (Mumbai / `ap-south-1`).
 3. **Project Settings → API** — copy two values:
    - **Project URL**
@@ -42,7 +42,7 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOi...
 1. Supabase → **SQL Editor → New query**.
 2. Paste the entire contents of `supabase/schema.sql` and **Run**.
 
-That single file now provisions the whole portal: `profiles`, `students`,
+That single file now provisions the whole platform: `profiles`, `students`,
 `collections` / `collections_basic`, `expenses`, `transfers`, `batches`,
 `expense_categories`, `bank_statements` / `bank_statement_lines`,
 `app_settings`, and the Academy Suite tables (`timetables`, `assignments`,
@@ -50,10 +50,10 @@ That single file now provisions the whole portal: `profiles`, `students`,
 `faculty_reviews`) — plus every RLS policy and the `is_admin()` /
 `is_super_admin()` / `is_approved_user()` / `can_view_financials()` helpers.
 
-> Already have an older database? Don't re-run `schema.sql`. Instead run the
-> `supabase/migration-*.sql` files **in filename order** — they are the
-> incremental patches (healthcare account → transfers/reconciliation →
-> admin/reports → staff access → super admin → academy suite).
+> Already have an older database? Don't re-run `schema.sql`. Instead apply the
+> `supabase/NN_*.sql` files **in numeric filename order** (`01`, `02`, ..., `10`),
+> plus the `supabase/migration-academy-suite*.sql` patches if the database
+> predates the Academy Suite (see `PROJECT_OVERVIEW.md` §8 for verification queries).
 
 (Optional) **Authentication → Providers → Email** — turn off "Confirm email"
 so new accounts don't need to click a link before approval.
@@ -123,7 +123,7 @@ vercel link
 ```
 
 Then add the two env vars in the dashboard and push. Domain:
-`finance.oksyacademy.in` (migrated to `pulse.oksyacademy.in`).
+`pulse.oksyacademy.in`.
 
 ## 7. Staying on the free tier
 

@@ -1,8 +1,7 @@
-# Oksy Academy Portal — Project Overview
+# Oksy Academy Pulse — Project Overview
 
 All-in-one academy management system (LMS + ERP + finance) for Oksy Academy
-LLP. Live at **finance.oksyacademy.in** (migrated to
-**pulse.oksyacademy.in**).
+LLP. Live at **pulse.oksyacademy.in**.
 
 > **For anyone (or any AI tool) picking this up:** read this file first.
 > The database is **live on Supabase** and migrations are hand-run SQL in
@@ -212,7 +211,7 @@ requests yet (see the roadmap's Phase 0).
 
 ## 8. Verifying production against this repo
 
-Before applying any `NN_*.sql` file, or after pulling this PR, run this
+Before applying any `NN_*.sql` file, run this
 read-only query in the Supabase SQL editor and compare against `schema.sql`:
 
 ```sql
@@ -260,28 +259,14 @@ migration): `SUPABASE_DB_URL="postgresql://..." ./scripts/backup-db.sh`.
 
 ## 10. Known gaps / attention list
 
-Items marked **(fixed in this PR)** were resolved by the engineering review
-in this branch — kept here so the history of what was found and when isn't
-lost.
+Items marked **(hardened)** or **(resolved)** were addressed during the engineering review and stabilization phases — kept here as permanent architectural context.
 
-Every SQL change in this PR (`schema.sql` and all of `01`–`10`) was actually
-run against a real Postgres 16 instance in this session — not just read —
-via two paths: (1) `schema.sql` on an empty database, and (2) `01`–`10` run
-in order on top of a copy of `main`'s current `schema.sql` (the closest
-available stand-in for the live production database). Both paths were
-confirmed to land on the same final schema, and the RLS/column-privilege
-behaviour in `06_close_collections_view_bypass.sql` was exercised directly —
-inserting a collection and reading it back through `collections_basic` as
-four different simulated users (the row's own creator, an unrelated
-non-financial staff member, a financial-access admin, and an unapproved
-user) — not just reasoned about. That process caught two real bugs that a
-read-through alone had missed, both already fixed in the files now in this
-branch:
+Every SQL migration (`schema.sql` and all of `01`–`10`) was verified against a real Postgres 16 instance via two paths: (1) `schema.sql` on an empty database, and (2) `01`–`10` run in order on top of a copy of `main`'s earlier `schema.sql` (the closest available stand-in for the live production database). Both paths were confirmed to land on the same final schema, and the RLS/column-privilege behaviour in `06_close_collections_view_bypass.sql` was exercised directly — inserting a collection and reading it back through `collections_basic` as four different simulated users (the row's own creator, an unrelated non-financial staff member, a financial-access admin, and an unapproved user) — not just reasoned about. That process caught and resolved two edge cases now permanently integrated into the schema:
 - The original `collections_basic` view was `security_invoker = true`. A
   security_invoker view checks the *calling* role's own column privileges
   against the underlying table for every column the view body touches —
   including inside the `case when ... else null end` that masks `account`.
-  Combined with this PR's fix of revoking `account` from `authenticated` on
+  Combined with the security hardening fix of revoking `account` from `authenticated` on
   the base table, that made the view throw "permission denied" for *every*
   caller, not just the ones meant to be masked. Fixed by dropping
   `security_invoker`, adding `security_barrier`, and writing the
@@ -289,27 +274,26 @@ branch:
   on RLS propagating through view ownership.
 - `05_super_admin.sql` tried to `create policy "profiles_super_admin_update_all"`
   without a matching `drop policy if exists` first, so re-running it against
-  a database that already had that policy (which `main`'s current
-  `schema.sql` does) failed outright. Fixed by adding the missing `drop
+  a database that already had that policy failed outright. Fixed by adding the missing `drop
   policy if exists`, matching the defensive pattern already used everywhere
   else in that file.
 
 **Infra**
 - Migrations were hand-run ad-hoc SQL with an order that didn't match their
-  filenames, and no version table. **(fixed:** renumbered to `NN_*.sql` in
+  filenames, and no version table. **(resolved:** renumbered to `NN_*.sql` in
   true dependency order; still no version table / CLI-managed migrations —
   consider adopting the Supabase CLI's migration runner if this project
   keeps growing.)
 - No CI — lint / test / build are only run by hand before push. **Still
   open** — add a GitHub Actions workflow running `npm run lint && npm test
   && npm run build` on every push/PR (roadmap Phase 0).
-- No backup of the database existed outside Supabase itself. **(fixed:**
+- No backup of the database existed outside Supabase itself. **(resolved:**
   `scripts/backup-db.sh` + `.github/workflows/nightly-backup.yml` — see §9
   Backups above. Needs the `SUPABASE_DB_URL` secret added to the repo before
   it will actually run successfully.)
 - The `create-user` Edge Function had to be deployed by hand, and the UI
   carried a permanent static note saying so under the "Create Login" button.
-  **(fixed:** `.github/workflows/deploy-edge-functions.yml` deploys it
+  **(resolved:** `.github/workflows/deploy-edge-functions.yml` deploys it
   automatically on every push to `supabase/functions/**`; the static note is
   gone, and `createStaffUser()` (`src/lib/data.js`) now distinguishes "the
   function ran and rejected the request" from "the request never reached a
@@ -343,7 +327,7 @@ branch:
   — left as-is; cosmetic, not correctness-affecting.
 
 **Functional**
-- `income` table was dead. **(fixed in this PR:** dropped — see
+- `income` table was dead. **(resolved via migration 08:** dropped — see
   `08_drop_income_table.sql`. If it held any rows in your project, export
   them before running that file; the file itself only checks and warns.)
 - **Net P&L** = `Revenue − Expense − Due to Healthcare`. `Total Expense`
@@ -364,16 +348,14 @@ branch:
   (Pulse + Timetable / Live Class / Assignments / Exams / Reviews) with a
   role-tailored dashboard. They were briefly excluded from the Create Login
   form's role list by an earlier fix written before these screens existed —
-  **corrected during this merge:** `ASSIGNABLE_ROLES` in `access.js` now
+  **corrected during role standardization:** `ASSIGNABLE_ROLES` in `access.js` now
   includes all five roles again, matching what `DEFAULT_ROLE_AREAS` actually
   gives them. A user with **no** areas enabled still hits the lock screen —
   still open.
 - `collections_basic` masked view was bypassable by querying
-  `public.collections` directly. **(fixed:** the base table's `select` grant
-  is now revoked for the `authenticated` role, and the view itself was
-  rewritten (it had its own latent bug, found while verifying this fix — see
-  the note at the top of this section) — see
-  `06_close_collections_view_bypass.sql`.)
+  `public.collections` directly. **(hardened via migration 06:** the base table's `select` grant
+  is revoked for the `authenticated` role, and the view itself was
+  rewritten with `security_barrier` — see `06_close_collections_view_bypass.sql`.)
 - Reconciliation auto-match is a date(±4d)+amount heuristic; the bank-statement
   parser is tuned to ICICI-style + a generic layout — new bank formats need
   parser work. Left as-is: no evidence yet that it's missing real matches in
@@ -384,21 +366,21 @@ branch:
   correct.)
 - Any `admin` (not just the Owner) could create a new `admin` login via the
   `create-user` function, and could read the full user roster via RLS.
-  **(fixed in this PR:** `create-user` now requires `super_admin`; the
+  **(hardened via migration 07:** `create-user` now requires `super_admin`; the
   `profiles` select policy for the full roster is now `is_super_admin()` —
   see `07_tighten_profiles_select.sql`.)
 - Edits/deletes to fee collections, expenses and transfers left no audit
-  trail. **(fixed in this PR:** `09_audit_log.sql` adds an `audit_log` table
+  trail. **(resolved via migration 09:** `09_audit_log.sql` adds an `audit_log` table
   and triggers capturing the old/new row, who, and when.)
 - A login created via "Create Login" kept its admin-set temp password
   indefinitely — nothing ever required the person to change it.
-  **(fixed in this PR:** `must_change_password` flag, set by `create-user`
+  **(resolved via migration 10:** `must_change_password` flag, set by `create-user`
   and checked in `src/App.jsx`; `ForcePasswordChange.jsx` gates the rest of
   the app until it's cleared — see `10_force_password_change.sql`.)
 - Every write (adding/editing/deleting a single fee collection, expense or
   transfer) reloads every table from scratch rather than updating local
   state directly — correct but wasteful, and it makes every save feel
-  slower than it needs to. **Not fixed in this PR, deliberately deferred:**
+  slower than it needs to. **Deferred to future optimization:**
   same reasoning as the `App.jsx` hook-split above — this means rewriting
   the mutation handlers in the app's highest-traffic file with no working
   build to catch a mistake (e.g. local state silently drifting from the DB

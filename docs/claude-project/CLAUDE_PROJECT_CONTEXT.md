@@ -4,13 +4,13 @@
 
 Name: Oksy Academy
 
-Current application: Oksy Academy Finance
+Current application: Oksy Academy Pulse
 
 Repository:
-https://github.com/Anoopdas-vs/oksy-academy-finance
+https://github.com/Anoopdas-vs/oksy-academy-pulse
 
 Production website:
-https://finance.oksyacademy.in/
+https://pulse.oksyacademy.in/
 
 ## Background
 
@@ -78,31 +78,15 @@ The objective is:
 
 "Understand the existing application, preserve what is already good, identify weaknesses, and systematically transform the system into a professional production-grade platform."
 
-## Current Known Concerns
+## Professionalization Status (Steps 1–12 Complete)
 
-The following are concerns that require investigation:
-- Authentication
-- Authorization
-- Supabase RLS
-- Database structure
-- Database relationships
-- Database queries
-- Security
-- Environment variables
-- Secrets
-- Git configuration
-- .gitignore
-- Testing
-- Error handling
-- Performance
-- Scalability
-- Code organization
-- UI/UX
-- Deployment
-- Monitoring
-- Backup and recovery
+The application is being professionalized through a 15-step incremental plan. Steps 1 through 12 are complete:
+- **Security & Authorization (Steps 1–3)**: Fixed forgeable financial records (CRIT-1) and assignment self-grading (H-2); tightened Supabase RLS policies and role verification (`is_super_admin()`, `can_view_financials()`); resolved view bypass vulnerabilities.
+- **Testing & Tooling (Steps 4 & 7)**: Established native unit-test suite (`node:test`) covering financial math and bank reconciliation; resolved dependency drift and CVEs (`xlsx` / SheetJS); enforced `oxlint` quality gates.
+- **Database Architecture (Steps 5 & 11)**: Ordered and hardened SQL migrations (`NN_*.sql`); implemented audit logging (`audit_log`) and forced password reset (`must_change_password`); reviewed and validated database terminology.
+- **Product Identity Rename (Steps 8–10)**: Rebranded product from "finance"/"portal" to "Oksy Academy Pulse", renamed repository and package configurations, and completed live production cutover to `pulse.oksyacademy.in`.
 
-These are investigation areas, NOT assumptions that everything is broken.
+Currently executing **Step 13: Documentation Consolidation**.
 
 ## Production Safety
 

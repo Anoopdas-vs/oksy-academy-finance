@@ -1,11 +1,11 @@
-# Oksy Academy Portal — Antigravity Project Instructions
+# Oksy Academy Pulse — Antigravity Project Instructions
 
-Welcome to the **Oksy Academy Portal** codebase.
+Welcome to the **Oksy Academy Pulse** codebase.
 
 ## 1. System Overview
 - **Application**: All-in-One Academy Management System (LMS + ERP + Finance)
-- **Live Production URL**: `https://finance.oksyacademy.in/` (migrated to `https://pulse.oksyacademy.in/`)
-- **Hosting**: Vercel (connected to GitHub `Anoopdas-vs/oksy-academy-finance` on `main`)
+- **Live Production URL**: `https://pulse.oksyacademy.in/`
+- **Hosting**: Vercel (connected to GitHub `Anoopdas-vs/oksy-academy-pulse` on `main`)
 - **Database**: Supabase (PostgreSQL + RLS + Auth)
 
 ## 2. Core Modules
@@ -21,7 +21,15 @@ Welcome to the **Oksy Academy Portal** codebase.
 - `npm run lint`: Runs `oxlint`. Must pass with 0 errors and 0 warnings.
 - `npm run build`: Production build via Vite. Bundle chunking configured in `vite.config.js`.
 
-## 4. Agent Guidelines (90% Autonomy)
+## 4. Governing Standards & Project Rules
+All agents and contributors must follow the authoritative standards in `docs/claude-project/`:
+- **Database & Architecture**: [`docs/claude-project/DATABASE_AND_ARCHITECTURE_RULES.md`](docs/claude-project/DATABASE_AND_ARCHITECTURE_RULES.md)
+- **Development & Testing**: [`docs/claude-project/DEVELOPMENT_AND_TESTING_RULES.md`](docs/claude-project/DEVELOPMENT_AND_TESTING_RULES.md)
+- **Security & RLS**: [`docs/claude-project/SECURITY_REQUIREMENTS.md`](docs/claude-project/SECURITY_REQUIREMENTS.md)
+- **Professionalization Standard**: [`docs/claude-project/PROFESSIONALIZATION_END_STATE_STANDARD.md`](docs/claude-project/PROFESSIONALIZATION_END_STATE_STANDARD.md)
+- **Product Vision & Roadmap**: [`docs/claude-project/PRODUCT_VISION_AND_ROADMAP.md`](docs/claude-project/PRODUCT_VISION_AND_ROADMAP.md)
+
+## 5. Agent Guidelines (90% Autonomy)
 - **Zero Heavy Sync Imports**: Never import heavy libraries like `xlsx` or `recharts` synchronously in `App.jsx`. Keep entry bundle under 200 kB.
 - **Maintain Modular Architecture**: Feature logic and modals belong in dedicated page/feature files.
 - **Database Changes**: Always add SQL DDL scripts to `supabase/` before updating UI layers.
