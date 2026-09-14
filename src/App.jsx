@@ -141,7 +141,7 @@ export default function App() {
     return (
       <FullScreenMessage
         title="Waiting for approval"
-        text="Your account has been created. An Oksy Academy admin needs to approve your access before you can use the academy portal."
+        text="Your account has been created. An Oksy Academy admin needs to approve your access before you can use Oksy Academy Pulse."
         action={{ label: "Sign out", onClick: signOut }}
       />
     );
@@ -1292,7 +1292,7 @@ function AppShell() {
 
           <div className="brand-footer">
             <strong>Oksy Academy</strong>
-            <span>Academy Portal v2.0</span>
+            <span>Oksy Academy Pulse v2.0</span>
             <span>Education for a Brighter Tomorrow</span>
           </div>
         </div>
