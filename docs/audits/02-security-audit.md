@@ -223,7 +223,7 @@ function still requires a valid bearer JWT, and that JWT lives in the app's
 own localStorage, not reachable by an arbitrary third-party origin's JS),
 but it's unnecessary attack surface for an admin-privileged endpoint and
 worth narrowing to the known app origins
-(`finance.oksyacademy.in`, `portal.oksyacademy.in`) as defense in depth.
+(`finance.oksyacademy.in`, `pulse.oksyacademy.in`) as defense in depth.
 
 #### M-3. Self-service Google OAuth signup doesn't actually require an invitation
 

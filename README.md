@@ -4,7 +4,7 @@ All-in-one academy management system for **Oksy Academy LLP** — LMS + ERP +
 finance in one app: timetable, live classes, assignments, online exams,
 faculty reviews, student enrolment, fee collection, expenses, inter-account
 transfers, bank reconciliation, reporting and role-based access. Live at
-**finance.oksyacademy.in** (moving to **portal.oksyacademy.in**).
+**finance.oksyacademy.in** (migrated to **pulse.oksyacademy.in**).
 
 React 19 + Vite 8 · Supabase (Postgres + Auth + RLS) · deployed on Vercel.
 

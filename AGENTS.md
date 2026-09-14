@@ -4,7 +4,7 @@ Welcome to the **Oksy Academy Portal** codebase.
 
 ## 1. System Overview
 - **Application**: All-in-One Academy Management System (LMS + ERP + Finance)
-- **Live Production URL**: `https://finance.oksyacademy.in/` (transitioning to `https://portal.oksyacademy.in/`)
+- **Live Production URL**: `https://finance.oksyacademy.in/` (migrated to `https://pulse.oksyacademy.in/`)
 - **Hosting**: Vercel (connected to GitHub `Anoopdas-vs/oksy-academy-finance` on `main`)
 - **Database**: Supabase (PostgreSQL + RLS + Auth)
 

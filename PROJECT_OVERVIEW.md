@@ -1,8 +1,8 @@
 # Oksy Academy Portal — Project Overview
 
 All-in-one academy management system (LMS + ERP + finance) for Oksy Academy
-LLP. Live at **finance.oksyacademy.in** (transitioning to
-**portal.oksyacademy.in**).
+LLP. Live at **finance.oksyacademy.in** (migrated to
+**pulse.oksyacademy.in**).
 
 > **For anyone (or any AI tool) picking this up:** read this file first.
 > The database is **live on Supabase** and migrations are hand-run SQL in

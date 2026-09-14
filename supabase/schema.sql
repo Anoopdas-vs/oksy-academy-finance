@@ -1,5 +1,5 @@
 -- ============================================================
--- Oksy Academy Finance — Supabase schema, roles & permissions
+-- Oksy Academy Pulse — Supabase schema, roles & permissions
 -- ============================================================
 -- Run this once in your Supabase project's SQL Editor
 -- (Dashboard -> SQL Editor -> New query -> paste this whole file -> Run).
