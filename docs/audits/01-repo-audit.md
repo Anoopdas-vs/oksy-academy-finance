@@ -38,7 +38,7 @@ created; it isn't a pre-existing part of this repo.
 single organization (Oksy Academy LLP). Single-page React app, no backend
 server of its own; all persistence and auth go through Supabase (Postgres +
 Row-Level Security + Auth). Deployed on Vercel, auto-deploying from `main`.
-Live at `finance.oksyacademy.in` (mid-transition to `portal.oksyacademy.in`).
+Live at `finance.oksyacademy.in` (migrated to `pulse.oksyacademy.in`).
 
 - **Frontend**: React 19 + Vite 8, plain JS/JSX (no TypeScript), no router
   (tab state lives in `src/App.jsx`), one hand-written global stylesheet.

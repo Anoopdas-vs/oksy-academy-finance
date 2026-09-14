@@ -123,7 +123,7 @@ vercel link
 ```
 
 Then add the two env vars in the dashboard and push. Domain:
-`finance.oksyacademy.in` (moving to `portal.oksyacademy.in`).
+`finance.oksyacademy.in` (migrated to `pulse.oksyacademy.in`).
 
 ## 7. Staying on the free tier
 
