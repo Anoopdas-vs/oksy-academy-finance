@@ -1,35 +1,26 @@
 -- ============================================================
--- Migration 18: drop orphaned v1 timetables table (Step 12 cleanliness)
+-- Migration 18: orphaned v1 timetables table (Step 12 cleanliness) — CLOSED
 -- ============================================================
--- Background (Step 4 database schema audit, confirmed again in Step 12):
--- `public.timetables` was the original v1 timetable table. The app was
--- later rebuilt on `timetable_slots` (see migration-academy-suite-v2.sql,
--- which explicitly says "`timetables` table is left untouched; the app
--- now uses `timetable_slots`"). A repo-wide grep of src/ confirms zero
--- references to `timetables` anywhere in application code — only the
--- unused table/policy definitions remain in schema.sql and
--- migration-academy-suite.sql.
+-- Background: `public.timetables` was the original v1 timetable table,
+-- later superseded by `timetable_slots` (migration-academy-suite-v2.sql
+-- explicitly says "timetables table is left untouched; the app now uses
+-- timetable_slots"). Confirmed unreferenced anywhere in src/.
 --
--- BEFORE RUNNING: verify there is genuinely no data worth keeping.
--- Run this check in the Supabase SQL Editor first:
---
+-- Verified 2026-09-14 in the Supabase SQL Editor:
 --   select count(*) from public.timetables;
+--   -> ERROR: 42P01: relation "public.timetables" does not exist
 --
--- If the count is 0, proceed below. If it is NOT 0, STOP — export the
--- rows first (e.g. `copy (select * from public.timetables) to stdout
--- csv header` via psql, or download from the Table Editor) before
--- dropping, and re-confirm with the product owner that the data is
--- genuinely unused.
+-- The table was never actually created in production (or was already
+-- removed earlier) -- there is nothing to drop here. No DROP TABLE was
+-- run against production for this migration.
 --
--- Rollback: table structure is captured in git history (see schema.sql
--- before this migration, and migration-academy-suite.sql). To recreate
--- an empty table, re-run the `create table public.timetables (...)` and
--- policy statements from migration-academy-suite.sql lines 7-104. Data
--- cannot be rolled back once dropped -- hence the row-count check above.
--- ------------------------------------------------------------
-
-begin;
-
-drop table if exists public.timetables cascade;
-
-commit;
+-- Action taken instead: removed the `timetables` CREATE TABLE / RLS /
+-- policy definitions from supabase/schema.sql (the fresh-install
+-- snapshot), so a new environment set up from schema.sql doesn't
+-- recreate this dead table. supabase/migration-academy-suite.sql (the
+-- old standalone migration) is left as historical record with a note --
+-- it should not be run against this project any more.
+--
+-- This migration file is intentionally left in place (renumbered
+-- migrations would be more disruptive than useful) as a record of the
+-- investigation. No SQL needs to be run for it.

@@ -2,6 +2,13 @@
 -- Migration: Oksy Academy Suite (Timetable, Live Class, Projects, Exams, Reviews)
 -- Run this migration in your Supabase SQL Editor to enable full academy tables.
 -- ============================================================================
+-- HISTORICAL FILE — DO NOT RUN AGAINST THIS PROJECT (Step 12 cleanliness pass,
+-- 2026-09-14): the `timetables` table this migration creates (section 1
+-- below) was superseded by `timetable_slots` in migration-academy-suite-v2.sql
+-- and is not part of the current schema (removed from schema.sql). Confirmed
+-- absent from production. Kept here only as a historical record of how the
+-- Academy Suite tables originated. See supabase/18_drop_timetables_v1.sql.
+-- ============================================================================
 
 -- 1. Timetable / Schedule Master
 CREATE TABLE IF NOT EXISTS timetables (

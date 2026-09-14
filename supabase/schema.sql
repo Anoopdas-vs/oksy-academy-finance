@@ -431,17 +431,13 @@ create policy "app_settings_super_admin_insert" on public.app_settings
 -- Mirrors supabase/migration-academy-suite.sql so a fresh project gets the
 -- full portal in one pass. All CREATE ... IF NOT EXISTS — safe to re-run.
 
-create table if not exists public.timetables (
-  id text primary key,
-  day text not null,                      -- Monday .. Saturday
-  time text not null,                     -- e.g. 10:00 AM - 11:30 AM
-  subject text not null,
-  batch text not null,
-  faculty text not null,
-  room text default 'Virtual Room 101',
-  link text,
-  created_at timestamptz default now()
-);
+-- NOTE (Step 12 cleanliness pass): the v1 `timetables` table used to be
+-- defined here. It was confirmed unreferenced anywhere in app code (the
+-- app now uses `timetable_slots`, see migration-academy-suite-v2.sql) and
+-- confirmed absent from the production database, so its definition was
+-- removed rather than left to be recreated by a fresh setup. See
+-- docs/claude-project/audits/04-database-schema-audit.md and
+-- supabase/18_drop_timetables_v1.sql for history.
 
 create table if not exists public.assignments (
   id text primary key,
@@ -510,18 +506,12 @@ create table if not exists public.faculty_reviews (
   created_at timestamptz default now()
 );
 
-alter table public.timetables enable row level security;
 alter table public.assignments enable row level security;
 alter table public.assignment_submissions enable row level security;
 alter table public.exams enable row level security;
 alter table public.exam_questions enable row level security;
 alter table public.exam_results enable row level security;
 alter table public.faculty_reviews enable row level security;
-
-create policy "Approved users can view timetable" on public.timetables
-  for select to authenticated using (public.is_approved_user());
-create policy "Admins can manage timetable" on public.timetables
-  for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 create policy "Approved users can view assignments" on public.assignments
   for select to authenticated using (public.is_approved_user());
