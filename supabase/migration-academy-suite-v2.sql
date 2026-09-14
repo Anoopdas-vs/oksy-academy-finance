@@ -31,6 +31,13 @@ create table if not exists public.faculty_batches (
 alter table public.faculty_batches enable row level security;
 
 -- Executive (staff) + Admin + Owner: the academic "monitor" tier.
+-- NOTE (Step 12 code-cleanliness audit): this function is also defined in
+-- 12_staff_or_admin_function.sql (the CRIT-1 financial-records fix). Both
+-- definitions are functionally identical (same role set, different list
+-- order) and both use `create or replace function`, so re-running either
+-- is harmless/idempotent regardless of apply order. Kept here deliberately
+-- rather than removed, since this migration must remain runnable on its
+-- own for a fresh database setup that skips the numbered CRIT-1 series.
 create or replace function public.is_staff_or_admin()
 returns boolean language sql security definer set search_path = public stable as $$
   select coalesce((select is_approved and role in ('staff', 'admin', 'super_admin')
