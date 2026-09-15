@@ -4,10 +4,10 @@ import { formatMoney } from "../lib/format.js";
 import StaffAccess from "../components/StaffAccess.jsx";
 import {
   ALL_AREAS,
-  DEFAULT_ROLE_AREAS,
   CONFIGURABLE_ROLES,
   ASSIGNABLE_ROLES,
   ROLE_LABEL,
+  resolveRoleAreas,
 } from "../lib/access.js";
 
 const emptyBatch = {
@@ -69,7 +69,7 @@ export default function AdminPage({
 /* -------------------------------- Access -------------------------------- */
 
 function AccessConfig({ roleAreas, busy, onSave }) {
-  const base = { ...DEFAULT_ROLE_AREAS, ...(roleAreas || {}) };
+  const base = resolveRoleAreas(roleAreas);
   const [sets, setSets] = useState(() =>
     Object.fromEntries(CONFIGURABLE_ROLES.map((r) => [r, new Set(base[r] || [])]))
   );
@@ -115,9 +115,12 @@ function AccessConfig({ roleAreas, busy, onSave }) {
           className="button primary"
           disabled={busy}
           onClick={async () => {
-            const payload = Object.fromEntries(
-              CONFIGURABLE_ROLES.map((r) => [r, [...sets[r]]])
-            );
+            const payload = {
+              _v: 2,
+              ...Object.fromEntries(
+                CONFIGURABLE_ROLES.map((r) => [r, [...sets[r]]])
+              ),
+            };
             await onSave(payload);
             setMsg("Saved. Users see the change on their next page load.");
           }}

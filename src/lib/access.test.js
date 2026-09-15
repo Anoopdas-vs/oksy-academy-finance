@@ -11,7 +11,7 @@
 // Run directly with: node --test src/lib
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { getAccess, DEFAULT_ROLE_AREAS } from "./access.js";
+import { getAccess, DEFAULT_ROLE_AREAS, resolveRoleAreas, ACADEMY_SUITE_AREAS } from "./access.js";
 
 const profile = (over = {}) => ({
   id: "U1",
@@ -115,19 +115,52 @@ describe("getAccess — role tiers", () => {
 });
 
 describe("getAccess — Owner-configured roleAreas override the defaults", () => {
-  test("a narrower admin-configured area list for staff is honored, not just the default", () => {
+  test("a narrower modern admin-configured area list for staff is honored, not just the default", () => {
     const access = getAccess(
       profile({ role: "staff" }),
-      { roleAreas: { staff: ["Pulse", "Reports"] } }
+      { roleAreas: { _v: 2, staff: ["Pulse", "Reports"] } }
     );
     assert.deepEqual(access.areas, ["Pulse", "Reports"]);
     assert.equal(access.canOpen("Fee Collection"), false);
   });
 
+  test("legacy roleAreas without _v backfills default Academy Suite areas", () => {
+    const legacyConfig = {
+      staff: ["Pulse", "Enrollment", "Fee Collection", "Expenses", "Reports", "Admin"],
+    };
+    const access = getAccess(profile({ role: "staff" }), { roleAreas: legacyConfig });
+    assert.deepEqual(access.areas, [
+      "Pulse",
+      "Timetable",
+      "Live Class",
+      "Assignments",
+      "Exams",
+      "Reviews",
+      "Enrollment",
+      "Fee Collection",
+      "Expenses",
+      "Reports",
+      "Admin",
+    ]);
+    assert.equal(access.canOpen("Timetable"), true);
+    assert.equal(access.canOpen("Assignments"), true);
+    assert.equal(access.canOpen("Banking"), false);
+  });
+
+  test("modern roleAreas with _v: 2 allows explicitly removing Academy Suite areas", () => {
+    const modernConfig = {
+      _v: 2,
+      staff: ["Pulse", "Fee Collection"],
+    };
+    const access = getAccess(profile({ role: "staff" }), { roleAreas: modernConfig });
+    assert.deepEqual(access.areas, ["Pulse", "Fee Collection"]);
+    assert.equal(access.canOpen("Timetable"), false);
+  });
+
   test("roleAreas cannot smuggle in an area outside the fixed ALL_AREAS list", () => {
     const access = getAccess(
       profile({ role: "staff" }),
-      { roleAreas: { staff: ["Pulse", "Not-A-Real-Area"] } }
+      { roleAreas: { _v: 2, staff: ["Pulse", "Not-A-Real-Area"] } }
     );
     assert.deepEqual(access.areas, ["Pulse"]);
   });
@@ -155,5 +188,33 @@ describe("getAccess — matches the shipped DEFAULT_ROLE_AREAS table", () => {
       const access = getAccess(profile({ role }));
       assert.deepEqual(access.areas, DEFAULT_ROLE_AREAS[role]);
     }
+  });
+});
+
+describe("resolveRoleAreas", () => {
+  test("returns DEFAULT_ROLE_AREAS for null or empty input", () => {
+    assert.deepEqual(resolveRoleAreas(null), DEFAULT_ROLE_AREAS);
+    assert.deepEqual(resolveRoleAreas(undefined), DEFAULT_ROLE_AREAS);
+    assert.deepEqual(resolveRoleAreas({}), DEFAULT_ROLE_AREAS);
+  });
+
+  test("backfills ACADEMY_SUITE_AREAS for legacy roleAreas missing them", () => {
+    const legacy = {
+      staff: ["Pulse", "Expenses"],
+    };
+    const resolved = resolveRoleAreas(legacy);
+    for (const area of ACADEMY_SUITE_AREAS) {
+      assert.ok(resolved.staff.includes(area), `expected staff to include ${area}`);
+    }
+    assert.ok(resolved.staff.includes("Expenses"));
+  });
+
+  test("respects explicit modern config (_v: 2) even when omitting ACADEMY_SUITE_AREAS", () => {
+    const modern = {
+      _v: 2,
+      staff: ["Pulse", "Expenses"],
+    };
+    const resolved = resolveRoleAreas(modern);
+    assert.deepEqual(resolved.staff, ["Pulse", "Expenses"]);
   });
 });
