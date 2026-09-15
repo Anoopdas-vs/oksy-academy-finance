@@ -341,7 +341,7 @@ function AppShell() {
     setDataLoading(true);
     try {
       const needCollections = access.financials || access.canOpen("Fee Collection");
-      const needExpenses = access.financials;
+      const needExpenses = access.financials || access.canOpen("Expenses");
 
       const [studentRows, collectionRows, batchRows, expenseRows, categoryRows, settings] =
         await Promise.all([
