@@ -114,7 +114,9 @@ export async function deleteAssignment(id) {
 }
 
 export async function fetchSubmissions(assignmentIds) {
-  let q = supabase.from("assignment_submissions").select("*");
+  let q = supabase
+    .from("assignment_submissions")
+    .select("*, student:profiles(full_name,email)");
   if (assignmentIds?.length) q = q.in("assignment_id", assignmentIds);
   const { data, error } = await q;
   return { rows: data || [], error: soft(error) };
