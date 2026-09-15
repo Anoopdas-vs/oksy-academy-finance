@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 
 // Colour of the figure:
 //   tone="pos" | "neg"  → force green / red
@@ -44,11 +44,19 @@ export function StatusBadge({ status }) {
   return <span className={`status-badge ${cls}`}>{status}</span>;
 }
 
-export function Input({ label, value, onChange, type = "text", placeholder, error, ...rest }) {
+export function Input({ label, value, onChange, type = "text", placeholder, error, id, ...rest }) {
+  const generatedId = useId();
+  const inputId =
+    id ||
+    (label
+      ? `input-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}-${generatedId.replace(/:/g, "")}`
+      : generatedId);
+
   return (
     <div className="field">
-      <label>{label}</label>
+      {label && <label htmlFor={inputId}>{label}</label>}
       <input
+        id={inputId}
         type={type}
         value={value}
         placeholder={placeholder}
