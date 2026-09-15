@@ -32,6 +32,7 @@ export default function ExamsPage({ access, batches = [] }) {
   const [examForm, setExamForm] = useState(emptyExam);
   const [questions, setQuestions] = useState([]);
   const [attemptRows, setAttemptRows] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
   // Live attempt
@@ -43,17 +44,36 @@ export default function ExamsPage({ access, batches = [] }) {
   const timerRef = useRef(null);
 
   const load = useCallback(async () => {
-    const { rows, error } = await fetchExams();
-    if (error?.suitePending) { setPending(true); return; }
-    if (error) setErr(error.message);
-    setExams(rows);
-    if (isStudent && access.userId) {
-      const { rows: a } = await fetchMyExamAttempts(access.userId);
-      setMyAttempts(a);
+    try {
+      const { rows, error } = await fetchExams();
+      if (error?.suitePending) { setPending(true); return; }
+      if (error) setErr(error.message);
+      setExams(rows);
+      if (isStudent && access.userId) {
+        const { rows: a } = await fetchMyExamAttempts(access.userId);
+        setMyAttempts(a);
+      }
+    } finally {
+      setLoading(false);
     }
   }, [isStudent, access.userId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      const { rows, error } = await fetchExams();
+      if (ignore) return;
+      if (error?.suitePending) { setPending(true); return; }
+      if (error) setErr(error.message);
+      setExams(rows);
+      if (isStudent && access.userId) {
+        const { rows: a } = await fetchMyExamAttempts(access.userId);
+        if (!ignore) setMyAttempts(a);
+      }
+      if (!ignore) setLoading(false);
+    })();
+    return () => { ignore = true; };
+  }, [isStudent, access.userId]);
 
   const attemptFor = (examId) => myAttempts.find((a) => a.exam_id === examId);
 
@@ -113,7 +133,7 @@ export default function ExamsPage({ access, batches = [] }) {
   };
 
   // ---- take exam ----
-  const startTest = async (ex) => {
+  const startTest = useCallback(async (ex) => {
     setErr("");
     const { rows: qs } = await fetchExamQuestionsForStudent(ex.id);
     if (!qs.length) { alert("This exam has no questions yet."); return; }
@@ -141,7 +161,7 @@ export default function ExamsPage({ access, batches = [] }) {
     } else {
       setTimeLeft(remaining);
     }
-  };
+  }, [access.userId, load]);
 
   const finish = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -253,7 +273,8 @@ export default function ExamsPage({ access, batches = [] }) {
 
       {!pending && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: "1rem" }}>
-          {exams.filter((e) => !isStudent || e.status === "published").map((ex) => {
+          {loading && <div className="table-card table-empty" style={{ padding: "2rem" }}>Loading exams…</div>}
+          {!loading && exams.filter((e) => !isStudent || e.status === "published").map((ex) => {
             const at = isStudent ? attemptFor(ex.id) : null;
             return (
               <div key={ex.id} className="table-card" style={{ padding: "1.25rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
@@ -298,7 +319,7 @@ export default function ExamsPage({ access, batches = [] }) {
               </div>
             );
           })}
-          {exams.length === 0 && <div className="table-card table-empty" style={{ padding: "2rem" }}>No exams yet.</div>}
+          {!loading && exams.length === 0 && <div className="table-card table-empty" style={{ padding: "2rem" }}>No exams yet.</div>}
         </div>
       )}
 

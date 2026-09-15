@@ -48,7 +48,6 @@ export default function TimetablePage({ access, batches = [], onOpenLiveClass })
   const [notifyMsg, setNotifyMsg] = useState("");
 
   const load = useCallback(async () => {
-    setLoading(true);
     const { rows, error } = await fetchTimetable();
     if (error?.suitePending) setPending(true);
     else if (error) setErr(error.message);
@@ -57,9 +56,21 @@ export default function TimetablePage({ access, batches = [], onOpenLiveClass })
   }, []);
 
   useEffect(() => {
-    load();
-    if (canManage) fetchFacultyProfiles().then(({ rows }) => setFaculty(rows));
-  }, [load, canManage]);
+    let ignore = false;
+    fetchTimetable().then(({ rows, error }) => {
+      if (ignore) return;
+      if (error?.suitePending) setPending(true);
+      else if (error) setErr(error.message);
+      setSlots(rows);
+      setLoading(false);
+    });
+    if (canManage) {
+      fetchFacultyProfiles().then(({ rows }) => {
+        if (!ignore) setFaculty(rows);
+      });
+    }
+    return () => { ignore = true; };
+  }, [canManage]);
 
   const facultyName = useMemo(() => {
     const m = new Map(faculty.map((f) => [f.id, f.full_name || f.email]));
