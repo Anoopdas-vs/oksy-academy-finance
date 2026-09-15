@@ -20,7 +20,6 @@ export default function LiveClassPage({ access }) {
   const [attendance, setAttendance] = useState([]);
 
   const load = useCallback(async () => {
-    setLoading(true);
     const [tt, ls] = await Promise.all([fetchTimetable(), fetchLiveSessions()]);
     if (tt.error?.suitePending || ls.error?.suitePending) setPending(true);
     setSlots(tt.rows.filter((s) => s.mode === "live" && s.status !== "cancelled"));
@@ -28,7 +27,17 @@ export default function LiveClassPage({ access }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let ignore = false;
+    Promise.all([fetchTimetable(), fetchLiveSessions()]).then(([tt, ls]) => {
+      if (ignore) return;
+      if (tt.error?.suitePending || ls.error?.suitePending) setPending(true);
+      setSlots(tt.rows.filter((s) => s.mode === "live" && s.status !== "cancelled"));
+      setSessions(ls.rows);
+      setLoading(false);
+    });
+    return () => { ignore = true; };
+  }, []);
 
   const activeSessionForSlot = (slotId) =>
     sessions.find((s) => s.slot_id === slotId && !s.ended_at);
@@ -130,7 +139,8 @@ export default function LiveClassPage({ access }) {
               <table>
                 <thead><tr><th>Started</th><th>Class</th><th>Batch</th><th>Ended</th><th></th></tr></thead>
                 <tbody>
-                  {sessions.slice(0, 15).map((ls) => (
+                  {loading && <tr><td colSpan={5}>Loading…</td></tr>}
+                  {!loading && sessions.slice(0, 15).map((ls) => (
                     <tr key={ls.id}>
                       <td>{new Date(ls.started_at).toLocaleString()}</td>
                       <td>{ls.slot?.subject || "—"}</td>
@@ -139,7 +149,7 @@ export default function LiveClassPage({ access }) {
                       <td><button className="button secondary small" onClick={() => showAttendance(ls)}>Attendance</button></td>
                     </tr>
                   ))}
-                  {sessions.length === 0 && <tr><td colSpan={5} className="table-empty">No sessions yet.</td></tr>}
+                  {!loading && sessions.length === 0 && <tr><td colSpan={5} className="table-empty">No sessions yet.</td></tr>}
                 </tbody>
               </table>
             </div>

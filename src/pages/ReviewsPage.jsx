@@ -14,20 +14,41 @@ export default function ReviewsPage({ access }) {
   const [reviews, setReviews] = useState([]);
   const [faculty, setFaculty] = useState([]);
   const [pending, setPending] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const { rows, error } = await fetchFacultyReviews();
-    if (error?.suitePending) { setPending(true); return; }
-    if (error) setErr(error.message);
-    setReviews(rows);
-    const { rows: f } = await fetchFacultyProfiles();
-    setFaculty(f);
+    try {
+      const { rows, error } = await fetchFacultyReviews();
+      if (error?.suitePending) { setPending(true); return; }
+      if (error) setErr(error.message);
+      setReviews(rows);
+      const { rows: f } = await fetchFacultyProfiles();
+      setFaculty(f);
+    } finally {
+      setLoading(false);
+    }
   }, []);
-  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      const { rows, error } = await fetchFacultyReviews();
+      if (ignore) return;
+      if (error?.suitePending) { setPending(true); return; }
+      if (error) setErr(error.message);
+      setReviews(rows);
+      const { rows: f } = await fetchFacultyProfiles();
+      if (!ignore) {
+        setFaculty(f);
+        setLoading(false);
+      }
+    })();
+    return () => { ignore = true; };
+  }, []);
 
   // Faculty see only reviews about themselves; the DB already scopes this,
   // but keep the guard for clarity.
@@ -115,8 +136,9 @@ export default function ReviewsPage({ access }) {
             <table>
               <thead><tr><th>Faculty</th><th>Subject</th><th>Rating</th><th>Comment</th><th>Date</th></tr></thead>
               <tbody>
-                {scoped.length === 0 && <tr><td colSpan={5} className="table-empty">No reviews yet.</td></tr>}
-                {scoped.map((r) => (
+                {loading && <tr><td colSpan={5} className="table-empty">Loading reviews...</td></tr>}
+                {!loading && scoped.length === 0 && <tr><td colSpan={5} className="table-empty">No reviews yet.</td></tr>}
+                {!loading && scoped.map((r) => (
                   <tr key={r.id}>
                     <td>{r.faculty_name}</td>
                     <td>{r.subject || "—"}</td>

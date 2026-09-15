@@ -54,7 +54,6 @@ export default function AssignmentsPage({ access, batches = [] }) {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
     const { rows, error } = await fetchAssignments();
     if (error?.suitePending) { setPending(true); setLoading(false); return; }
     if (error) setErr(error.message);
@@ -64,7 +63,22 @@ export default function AssignmentsPage({ access, batches = [] }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      const { rows, error } = await fetchAssignments();
+      if (ignore) return;
+      if (error?.suitePending) { setPending(true); setLoading(false); return; }
+      if (error) setErr(error.message);
+      setAssignments(rows);
+      const { rows: sr } = await fetchSubmissions(rows.map((a) => a.id));
+      if (!ignore) {
+        setSubs(sr);
+        setLoading(false);
+      }
+    })();
+    return () => { ignore = true; };
+  }, []);
 
   const mySub = useCallback(
     (asgId) => subs.find((s) => s.assignment_id === asgId && s.student_id === access.userId),
