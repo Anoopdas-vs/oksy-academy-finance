@@ -44,6 +44,20 @@ export function StatusBadge({ status }) {
   return <span className={`status-badge ${cls}`}>{status}</span>;
 }
 
+export function ErrorBanner({ message, error, children, className = "", style }) {
+  const content = children || message || error;
+  if (!content) return null;
+  return (
+    <div
+      role="alert"
+      className={`form-error-banner ${className}`.trim()}
+      style={style}
+    >
+      {content}
+    </div>
+  );
+}
+
 export function Input({ label, value, onChange, type = "text", placeholder, error, id, ...rest }) {
   const generatedId = useId();
   const inputId =

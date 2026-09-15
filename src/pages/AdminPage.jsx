@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Input, Modal } from "../components/ui.jsx";
+import { ErrorBanner, Input, Modal } from "../components/ui.jsx";
 import { formatMoney } from "../lib/format.js";
 import StaffAccess from "../components/StaffAccess.jsx";
 import {
@@ -181,7 +181,7 @@ function Batches({ batches, busy, actions, canDelete }) {
       <div className="form-card">
         <h3>{editing ? "Edit Batch" : "New Batch"}</h3>
         <form onSubmit={submit}>
-          {error && <div className="form-error-banner">{error}</div>}
+          <ErrorBanner error={error} />
           <Input label="Batch name" value={form.name} onChange={(v) => set({ name: v })} required />
           <Input label="Course name" value={form.course_name} onChange={(v) => set({ course_name: v })} />
           <div className="field-row">
@@ -281,7 +281,7 @@ function Categories({ categories, expenses, busy, actions, canDelete }) {
       <div className="form-card">
         <h3>Add Category</h3>
         <form onSubmit={add}>
-          {error && <div className="form-error-banner">{error}</div>}
+          <ErrorBanner error={error} />
           <Input label="Category name" value={name} onChange={setName} required />
           <button className="button primary full" type="submit" disabled={busy}>
             {busy ? "Saving..." : "Add Category"}
@@ -392,7 +392,7 @@ function Users({ busy, actions }) {
       <div className="form-card">
         <h3>Create Login</h3>
         <form onSubmit={submit}>
-          {error && <div className="form-error-banner">{error}</div>}
+          <ErrorBanner error={error} />
           {msg && <div className="auth-message notice">{msg}</div>}
           <Input label="Full name" value={form.full_name} onChange={(v) => set({ full_name: v })} />
           <Input label="Email" type="email" value={form.email} onChange={(v) => set({ email: v })} required />

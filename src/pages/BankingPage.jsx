@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Input, Modal, MetricCard } from "../components/ui.jsx";
+import { ErrorBanner, Input, Modal, MetricCard } from "../components/ui.jsx";
 import { formatMoney } from "../lib/format.js";
 import StudentPicker from "../components/StudentPicker.jsx";
 import { SearchBox, Pager } from "../components/SearchPager.jsx";
@@ -137,7 +137,7 @@ function TransfersView({ isAdmin, transfers, form, setForm, onSubmit, saving, fo
             </div>
           </div>
           <form onSubmit={onSubmit}>
-            {formError && <div className="form-error-banner">{formError}</div>}
+            <ErrorBanner error={formError} />
             <Input label="Date" type="date" value={form.date} onChange={(v) => set({ date: v })} required />
             <div className="field-row">
               <div className="field">

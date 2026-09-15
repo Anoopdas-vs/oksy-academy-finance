@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Modal, Input } from "../components/ui.jsx";
+import { ErrorBanner, Modal, Input } from "../components/ui.jsx";
 import {
   fetchTimetable,
   saveTimetableSlot,
@@ -198,7 +198,7 @@ export default function TimetablePage({ access, batches = [], onOpenLiveClass })
           <p>Run <code>supabase/migration-academy-suite-v2.sql</code> to enable the timetable.</p>
         </div>
       )}
-      {err && <div className="auth-message error">{err}</div>}
+      <ErrorBanner error={err} />
 
       {!pending && (
         <>
@@ -288,7 +288,7 @@ export default function TimetablePage({ access, batches = [], onOpenLiveClass })
       {showForm && (
         <Modal title={form.id ? "Edit class" : "Schedule class"} onClose={() => setShowForm(false)}>
           <form className="form-grid" onSubmit={submit}>
-            {err && <div className="form-error-banner">{err}</div>}
+            <ErrorBanner error={err} />
             <div className="field">
               <label>Batch</label>
               <select

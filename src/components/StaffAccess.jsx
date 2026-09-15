@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
 import { useAuth } from "../context/useAuth.js";
 import { ASSIGNABLE_ROLES, ROLE_LABEL } from "../lib/access.js";
-import { Modal } from "./ui.jsx";
+import { ErrorBanner, Modal } from "./ui.jsx";
 import { fetchFacultyBatches, setFacultyBatches } from "../lib/academy.js";
 
 const LEARNER_ROLES = ["student", "professional"];
@@ -95,7 +95,7 @@ export default function StaffAccess() {
         )}
       </div>
 
-      {error && <div className="auth-message error">{error}</div>}
+      <ErrorBanner error={error} />
 
       <div className="table-card">
         <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid var(--border, #e2e8f0)", display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>

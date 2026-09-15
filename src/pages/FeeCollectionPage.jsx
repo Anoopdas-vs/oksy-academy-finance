@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Input, LockedValue, Modal } from "../components/ui.jsx";
+import { ErrorBanner, Input, LockedValue, Modal } from "../components/ui.jsx";
 import { formatMoney } from "../lib/format.js";
 import { SearchBox, Pager } from "../components/SearchPager.jsx";
 import { usePagedList } from "../lib/usePagedList.js";
@@ -75,7 +75,7 @@ export default function FeeCollectionPage({
         <div className="form-card">
           <h3>New Fee Collection</h3>
           <form onSubmit={onSubmit}>
-            {formError && <div className="form-error-banner">{formError}</div>}
+            <ErrorBanner error={formError} />
             <div className="field">
               <label>Student</label>
               <StudentPicker

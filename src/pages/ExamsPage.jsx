@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, Input } from "../components/ui.jsx";
+import { ErrorBanner, Modal, Input } from "../components/ui.jsx";
 import {
   fetchExams,
   saveExam,
@@ -249,7 +249,7 @@ export default function ExamsPage({ access, batches = [] }) {
           <p>Run <code>supabase/migration-academy-suite-v2.sql</code> to enable exams.</p>
         </div>
       )}
-      {err && <div className="auth-message error">{err}</div>}
+      <ErrorBanner error={err} />
 
       {!pending && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: "1rem" }}>
@@ -305,7 +305,7 @@ export default function ExamsPage({ access, batches = [] }) {
       {modal === "exam" && (
         <Modal title={examForm.id ? "Edit exam" : "Create exam"} onClose={() => setModal(null)}>
           <form className="form-grid" onSubmit={(e) => { e.preventDefault(); saveExamForm(true); }}>
-            {err && <div className="form-error-banner">{err}</div>}
+            <ErrorBanner error={err} />
             <Input label="Title" value={examForm.title} onChange={(v) => setExamForm({ ...examForm, title: v })} required />
             <div className="field">
               <label>Batch</label>
@@ -329,7 +329,7 @@ export default function ExamsPage({ access, batches = [] }) {
       {modal === "questions" && current && (
         <Modal title={`Questions — ${current.title}`} onClose={() => setModal(null)}>
           <div className="form-grid">
-            {err && <div className="form-error-banner">{err}</div>}
+            <ErrorBanner error={err} />
             {questions.map((q, qi) => (
               <div key={qi} className="table-card" style={{ padding: "1rem" }}>
                 <Input label={`Question ${qi + 1}`} value={q.question} onChange={(v) => setQuestions((qs) => qs.map((x, i) => i === qi ? { ...x, question: v } : x))} />
