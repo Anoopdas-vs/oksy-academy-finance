@@ -1,4 +1,4 @@
-import React, { useId } from "react";
+import React, { useEffect, useId, useRef } from "react";
 
 // Colour of the figure:
 //   tone="pos" | "neg"  → force green / red
@@ -70,12 +70,93 @@ export function Input({ label, value, onChange, type = "text", placeholder, erro
 }
 
 export function Modal({ title, children, onClose }) {
+  const titleId = useId();
+  const modalRef = useRef(null);
+  const overlayRef = useRef(null);
+
+  useEffect(() => {
+    const prevActive = document.activeElement;
+
+    if (modalRef.current) {
+      const focusable = modalRef.current.querySelector(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable) {
+        focusable.focus();
+      } else {
+        modalRef.current.focus();
+      }
+    }
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose?.();
+        return;
+      }
+      if (e.key === "Tab" && modalRef.current) {
+        const focusables = Array.from(
+          modalRef.current.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter((el) => el.offsetParent !== null || el.getClientRects().length > 0);
+        if (focusables.length === 0) {
+          e.preventDefault();
+          return;
+        }
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first || !modalRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last || !modalRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (prevActive && typeof prevActive.focus === "function") {
+        prevActive.focus();
+      }
+    };
+  }, [onClose]);
+
   return (
-    <div className="modal-overlay">
-      <div className="modal">
+    <div
+      className="modal-overlay"
+      ref={overlayRef}
+      onClick={(e) => {
+        if (e.target === overlayRef.current) {
+          onClose?.();
+        }
+      }}
+    >
+      <div
+        ref={modalRef}
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        tabIndex={-1}
+      >
         <div className="modal-header">
-          <h3>{title}</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
+          {title && <h3 id={titleId}>{title}</h3>}
+          <button
+            className="modal-close"
+            type="button"
+            aria-label="Close modal"
+            onClick={onClose}
+          >
+            ×
+          </button>
         </div>
         {children}
       </div>
