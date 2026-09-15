@@ -1286,8 +1286,14 @@ function AppShell() {
             </div>
           </div>
 
-          <button className="button secondary full sign-out" onClick={signOut}>
-            Sign Out
+          <button
+            className="button secondary full sign-out"
+            onClick={signOut}
+            title="Sign Out"
+            aria-label="Sign Out"
+          >
+            <span className="sign-out-text">Sign Out</span>
+            <span className="sign-out-icon" aria-hidden="true">⎋</span>
           </button>
 
           <div className="brand-footer">
@@ -1316,8 +1322,19 @@ function AppShell() {
               <span className="top-user-avatar">
                 {(profile.full_name || profile.email || "?").charAt(0).toUpperCase()}
               </span>
-              {profile.full_name || profile.email}
+              <span className="top-user-name">
+                {profile.full_name || profile.email}
+              </span>
             </div>
+            <button
+              className="top-sign-out"
+              onClick={signOut}
+              title="Sign Out"
+              aria-label="Sign Out"
+            >
+              <span className="top-sign-out-text">Sign Out</span>
+              <span className="top-sign-out-icon" aria-hidden="true">⎋</span>
+            </button>
           </div>
         </header>
 

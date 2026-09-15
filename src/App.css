@@ -364,6 +364,10 @@ button {
   background: rgba(255, 255, 255, 0.16) !important;
 }
 
+.sign-out-icon {
+  display: none;
+}
+
 /* =========================
    MAIN
 ========================= */
@@ -1356,9 +1360,26 @@ tfoot td {
   }
 
   .security-box,
-  .user-mini > div:not(.avatar),
-  .sign-out {
+  .user-mini > div:not(.avatar) {
     display: none;
+  }
+
+  .sign-out {
+    width: 44px;
+    height: 36px;
+    padding: 0 !important;
+    margin: 8px auto 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sign-out-text {
+    display: none;
+  }
+  .sign-out-icon {
+    display: inline;
+    font-size: 16px;
+    line-height: 1;
   }
 
   .main-content {
@@ -1390,6 +1411,22 @@ tfoot td {
 
   .period-current {
     display: none;
+  }
+
+  .top-user-name {
+    display: none;
+  }
+
+  .top-sign-out {
+    padding: 5px 7px;
+    font-size: 12px;
+  }
+  .top-sign-out-text {
+    display: none;
+  }
+  .top-sign-out-icon {
+    display: inline;
+    font-size: 14px;
   }
 
   .metric-grid,
@@ -1984,9 +2021,25 @@ tfoot td {
 .nav-collapsed .brand > div,
 .nav-collapsed .nav-label,
 .nav-collapsed .security-box,
-.nav-collapsed .user-mini > div:not(.avatar),
-.nav-collapsed .sign-out {
+.nav-collapsed .user-mini > div:not(.avatar) {
   display: none;
+}
+.nav-collapsed .sign-out {
+  width: 44px;
+  height: 36px;
+  padding: 0 !important;
+  margin: 8px auto 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.nav-collapsed .sign-out-text {
+  display: none;
+}
+.nav-collapsed .sign-out-icon {
+  display: inline;
+  font-size: 16px;
+  line-height: 1;
 }
 .nav-collapsed .brand {
   justify-content: center;
@@ -2042,6 +2095,31 @@ tfoot td {
   place-items: center;
   font-size: 11px;
   font-weight: 700;
+}
+
+.top-sign-out {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.top-sign-out:hover {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.top-sign-out-icon {
+  display: none;
 }
 
 /* =========================
