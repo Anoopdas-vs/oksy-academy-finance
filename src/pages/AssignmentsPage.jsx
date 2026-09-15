@@ -176,16 +176,6 @@ export default function AssignmentsPage({ access, batches = [] }) {
 
   return (
     <section className="page">
-      <div className="page-header">
-        <div>
-          <h2>Assignments</h2>
-          <p>{canManage ? "Create, publish and grade coursework." : "Your coursework and grades."}</p>
-        </div>
-        {canManage && !pending && (
-          <button className="button primary" onClick={openCreate}>+ Create assignment</button>
-        )}
-      </div>
-
       {pending && (
         <div className="empty-state">
           <div className="empty-icon">📋</div>
@@ -205,6 +195,9 @@ export default function AssignmentsPage({ access, batches = [] }) {
                     {f[0].toUpperCase() + f.slice(1)}
                   </button>
                 ))}
+              </div>
+              <div className="toolbar-actions">
+                <button className="button primary" onClick={openCreate}>+ Create assignment</button>
               </div>
             </div>
           )}

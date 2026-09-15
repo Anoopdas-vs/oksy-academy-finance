@@ -84,7 +84,6 @@ import Receipt from "./components/Receipt.jsx";
 
 const HOME = "Pulse"; // dashboard tab name
 
-// Topbar heading per tab
 const TAB_TITLES = {
   Pulse: "Academy Pulse",
   Timetable: "Class Timetable & Schedule",
@@ -98,6 +97,22 @@ const TAB_TITLES = {
   Banking: "Banking",
   Reports: "Reports & Controls",
   Admin: "Admin",
+};
+
+// Contextual subtitle per tab displayed in the topbar
+const TAB_SUBTITLES = {
+  [HOME]: "Academic and financial performance overview",
+  Timetable: "Schedule and manage daily class sessions across batches",
+  "Live Class": "Join active sessions and track live attendance",
+  Assignments: "Create, publish, and grade coursework",
+  Exams: "Schedule tests and review student submissions",
+  Reviews: "Student feedback and faculty rating trends",
+  Enrollment: "Student registration, batch assignment, and fee plans",
+  "Fee Collection": "Record student payments, track receipts and dues",
+  Expenses: "Track operational expenses and vendor disbursements",
+  Banking: "Account balances, bank reconciliation, and cash transfers",
+  Reports: "Financial statements, audit logs, and analytical reports",
+  Admin: "System settings, batches, user roles, and access control",
 };
 
 const NAV_BASE = [
@@ -1323,7 +1338,7 @@ function AppShell() {
             </button>
             <div>
               <h1>{TAB_TITLES[activeTab] || activeTab}</h1>
-              <p>Oksy Academy financial management</p>
+              {TAB_SUBTITLES[activeTab] && <p>{TAB_SUBTITLES[activeTab]}</p>}
             </div>
           </div>
           <div className="topbar-right">
