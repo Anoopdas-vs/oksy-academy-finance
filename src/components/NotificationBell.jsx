@@ -20,9 +20,17 @@ export default function NotificationBell({ onNavigate }) {
   }, []);
 
   useEffect(() => {
-    load();
+    let ignore = false;
+    fetchNotifications(30).then(({ rows, error }) => {
+      if (ignore) return;
+      if (error?.suitePending) { setHidden(true); return; }
+      setItems(rows);
+    });
     const t = setInterval(load, 60000);
-    return () => clearInterval(t);
+    return () => {
+      ignore = true;
+      clearInterval(t);
+    };
   }, [load]);
 
   useEffect(() => {
