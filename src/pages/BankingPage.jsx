@@ -35,6 +35,7 @@ export default function BankingPage({
   onIgnoreLine,
   onUnmatchLine,
   onDeleteStatement,
+  loading = false,
 }) {
   const [view, setView] = useState("transfers");
 
@@ -72,6 +73,7 @@ export default function BankingPage({
         <TransfersView
           isAdmin={isAdmin}
           transfers={transfers}
+          loading={loading}
           form={transferForm}
           setForm={setTransferForm}
           onSubmit={onAddTransfer}
@@ -102,7 +104,7 @@ export default function BankingPage({
 
 /* ------------------------------ Transfers ------------------------------ */
 
-function TransfersView({ isAdmin, transfers, form, setForm, onSubmit, saving, formError, onFile, onEdit, onDelete }) {
+function TransfersView({ isAdmin, transfers, form, setForm, onSubmit, saving, formError, onFile, onEdit, onDelete, loading = false }) {
   const set = (patch) => setForm({ ...form, ...patch });
   const [editing, setEditing] = useState(null);
   const [rowBusy, setRowBusy] = useState(false);
@@ -190,10 +192,17 @@ function TransfersView({ isAdmin, transfers, form, setForm, onSubmit, saving, fo
             </tr>
           </thead>
           <tbody>
-            {paged.pageRows.length === 0 && (
-              <tr><td colSpan={isAdmin ? 7 : 6} className="table-empty">No transfers recorded yet.</td></tr>
+            {loading && (
+              <tr><td colSpan={isAdmin ? 7 : 6} className="table-empty">Loading transfers...</td></tr>
             )}
-            {paged.pageRows.map((t) => (
+            {!loading && paged.pageRows.length === 0 && (
+              <tr>
+                <td colSpan={isAdmin ? 7 : 6} className="table-empty">
+                  {paged.query ? "No transfers matching your search." : "No transfers recorded yet."}
+                </td>
+              </tr>
+            )}
+            {!loading && paged.pageRows.map((t) => (
               <tr key={t.id}>
                 <td>{t.date}</td>
                 <td><span className="mini-tag">{t.from_account}</span></td>

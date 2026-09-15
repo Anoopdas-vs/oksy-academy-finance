@@ -26,6 +26,7 @@ export default function ExpensesPage({
   canDelete = false,
   saving,
   formError,
+  loading = false,
 }) {
   const showActions = canEdit || canDelete;
   const set = (patch) => setForm({ ...form, ...patch });
@@ -122,10 +123,17 @@ export default function ExpensesPage({
               </tr>
             </thead>
             <tbody>
-              {paged.pageRows.length === 0 && (
-                <tr><td colSpan={showActions ? 7 : 6} className="table-empty">No expenses in this period.</td></tr>
+              {loading && (
+                <tr><td colSpan={showActions ? 7 : 6} className="table-empty">Loading expenses...</td></tr>
               )}
-              {paged.pageRows.map((e) => (
+              {!loading && paged.pageRows.length === 0 && (
+                <tr>
+                  <td colSpan={showActions ? 7 : 6} className="table-empty">
+                    {paged.query ? "No expenses matching your search." : "No expenses in this period."}
+                  </td>
+                </tr>
+              )}
+              {!loading && paged.pageRows.map((e) => (
                 <tr key={e.id}>
                   <td><span className="student-id">{expenseCode(e.id)}</span></td>
                   <td>{e.date}</td>

@@ -26,6 +26,7 @@ export default function FeeCollectionPage({
   canDelete = false,
   saving,
   formError,
+  loading = false,
 }) {
   const set = (patch) => setForm({ ...form, ...patch });
   const [editing, setEditing] = useState(null);
@@ -173,7 +174,19 @@ export default function FeeCollectionPage({
               </tr>
             </thead>
             <tbody>
-              {paged.pageRows.map((item) => {
+              {loading && (
+                <tr>
+                  <td colSpan={showActions ? 9 : 8} className="table-empty">Loading collections...</td>
+                </tr>
+              )}
+              {!loading && paged.pageRows.length === 0 && (
+                <tr>
+                  <td colSpan={showActions ? 9 : 8} className="table-empty">
+                    {paged.query ? "No fee collections matching your search." : "No collections in this period."}
+                  </td>
+                </tr>
+              )}
+              {!loading && paged.pageRows.map((item) => {
                 const student = students.find((s) => s.id === item.student_id);
                 const paidForItemStudent = paidByStudent(item.student_id);
                 const outstanding = student

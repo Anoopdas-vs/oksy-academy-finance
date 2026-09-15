@@ -1414,6 +1414,7 @@ function AppShell() {
           <EnrollmentPage
             students={students}
             batches={batches}
+            loading={dataLoading}
             onFileSelected={handleStudentFile}
             onNew={openNewStudent}
             onEdit={editStudent}
@@ -1434,6 +1435,7 @@ function AppShell() {
             collections={visibleCollections}
             allCollections={collections}
             periodLabel={periodLabel(period)}
+            loading={dataLoading}
             form={collectionForm}
             setForm={setCollectionForm}
             onSubmit={addCollection}
@@ -1452,6 +1454,7 @@ function AppShell() {
             expenses={visibleExpenses}
             categories={expenseCategories}
             periodLabel={periodLabel(period)}
+            loading={dataLoading}
             form={expenseForm}
             setForm={setExpenseForm}
             onSubmit={addExpense}
@@ -1476,6 +1479,7 @@ function AppShell() {
             bankStatements={bankStatements}
             bankLines={bankLines}
             busy={bankBusy}
+            loading={dataLoading}
             transferForm={transferForm}
             setTransferForm={setTransferForm}
             onAddTransfer={addTransfer}

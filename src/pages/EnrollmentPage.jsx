@@ -19,6 +19,7 @@ export default function EnrollmentPage({
   onSave,
   saving,
   formError,
+  loading = false,
 }) {
   const set = (patch) => setForm({ ...form, ...patch });
 
@@ -79,7 +80,19 @@ export default function EnrollmentPage({
             </tr>
           </thead>
           <tbody>
-            {paged.pageRows.map((s) => (
+            {loading && (
+              <tr>
+                <td colSpan={12} className="table-empty">Loading students...</td>
+              </tr>
+            )}
+            {!loading && paged.pageRows.length === 0 && (
+              <tr>
+                <td colSpan={12} className="table-empty">
+                  {paged.query ? "No students matching your search." : "No students enrolled."}
+                </td>
+              </tr>
+            )}
+            {!loading && paged.pageRows.map((s) => (
               <tr key={s.id}>
                 <td><strong className="student-id">{s.id}</strong></td>
                 <td>{s.batch}</td>
