@@ -41,19 +41,19 @@ Step 14 focuses on a comprehensive **UI/UX Consistency Pass**. As defined in the
 | **UX-03** | Navigation / Auth | **RESOLVED (Pass 1)** | Staff role missing Academy Suite tabs when `roleAreas` persisted | `lib/access.js:87–93`, `AdminPage.jsx` |
 | **UX-04** | Information Display | **RESOLVED (Pass 1)** | Assignment submissions table renders raw truncated UUIDs (`s.student_id.slice(0, 8)`) instead of student names | `AssignmentsPage.jsx:342`, `lib/academy.js:117` |
 | **UX-05** | Accessibility (a11y) | **RESOLVED (Pass 1)** | Form inputs in `Input` component lack `id` / `htmlFor` label association | `components/ui.jsx:47–62` |
-| **UX-06** | Page Hierarchy | **DEFERRED (Pass 2)** | Hardcoded subtitle `"Oksy Academy financial management"` displays under every page topbar | `App.jsx:1309` |
+| **UX-06** | Page Hierarchy | **RESOLVED (Pass 2)** | Hardcoded subtitle `"Oksy Academy financial management"` displays under every page topbar | `App.jsx:1309` |
 | **UX-07** | Navigation / Context | **RESOLVED (Pass 1)** | Topbar `PeriodFilter` is visible on academic pages where it has no function | `App.jsx:1319` |
-| **UX-08** | Page Hierarchy | **DEFERRED (Pass 2)** | Duplicate headers (`h1` topbar + `h2` page-header) on Academy Suite screens | `App.jsx:1308`, `TimetablePage.jsx:178`, `AssignmentsPage.jsx:167` |
-| **UX-09** | Tables / UX | **DEFERRED (Pass 2)** | Enrollment and Fee Collection tables lack empty states when filters return 0 rows | `EnrollmentPage.jsx:82`, `FeeCollectionPage.jsx:176` |
-| **UX-10** | State Handling | **DEFERRED (Pass 2)** | Ad-hoc, fragmented loading states (some pages show nothing, some table rows, some cards) | `ExamsPage.jsx`, `ReviewsPage.jsx`, `App.jsx:1324` |
-| **UX-11** | Forms / Styling | **DEFERRED (Pass 2)** | Two conflicting error banner classes (`.form-error-banner` vs `.auth-message.error`) | `components/ui.jsx`, `App.css:161, 1530` |
-| **UX-12** | Performance / Lint | **DEFERRED (Pass 2)** | Redundant synchronous `setLoading(true)` on mount causes double-renders | `LiveClassPage.jsx:23`, `TimetablePage.jsx:51`, `AssignmentsPage.jsx:57` |
-| **UX-13** | Modals / A11y | **DEFERRED (Pass 2)** | `Modal` lacks `Escape` key dismiss, backdrop click dismiss, and ARIA dialog roles | `components/ui.jsx:64–76` |
-| **UX-14** | Typography | **DEFERRED (Pass 2)** | Sub-readable 9px uppercase table headers and metadata captions | `App.css:774, 800, 2438` |
-| **UX-15** | Accessibility (a11y) | **DEFERRED (Pass 2)** | Low contrast ratio on `--muted` text on white ($3.83:1$, fails WCAG AA $4.5:1$) | `App.css:26` |
-| **UX-16** | Interaction / Feedback | **DEFERRED (Pass 2)** | Blocking native browser `alert()` and `confirm()` dialogs across all workflows | `App.jsx:1233`, `ExpensesPage.jsx:149`, `StaffAccess.jsx:52` |
-| **UX-17** | Iconography | **DEFERRED (Pass 2)** | Mixed glyph systems (geometric text characters vs colorful OS emoji) in sidebar | `App.jsx:103–115` |
-| **UX-18** | Mobile Layout | **DEFERRED (Pass 2)** | Fixed 72px sidebar on smartphones instead of an off-canvas drawer | `App.css:1335, 1981` |
+| **UX-08** | Page Hierarchy | **RESOLVED (Pass 2)** | Duplicate headers (`h1` topbar + `h2` page-header) on Academy Suite screens | `App.jsx:1308`, `TimetablePage.jsx:178`, `AssignmentsPage.jsx:167` |
+| **UX-09** | Tables / UX | **RESOLVED (Pass 2)** | Enrollment and Fee Collection tables lack empty states when filters return 0 rows | `EnrollmentPage.jsx:82`, `FeeCollectionPage.jsx:176` |
+| **UX-10** | State Handling | **RESOLVED (Pass 2)** | Ad-hoc, fragmented loading states (some pages show nothing, some table rows, some cards) | `ExamsPage.jsx`, `ReviewsPage.jsx`, `App.jsx:1324` |
+| **UX-11** | Forms / Styling | **RESOLVED (Pass 2)** | Two conflicting error banner classes (`.form-error-banner` vs `.auth-message.error`) | `components/ui.jsx`, `App.css:161, 1530` |
+| **UX-12** | Performance / Lint | **RESOLVED (Pass 2)** | Redundant synchronous `setLoading(true)` on mount causes double-renders | `LiveClassPage.jsx:23`, `TimetablePage.jsx:51`, `AssignmentsPage.jsx:57` |
+| **UX-13** | Modals / A11y | **RESOLVED (Pass 2)** | `Modal` lacks `Escape` key dismiss, backdrop click dismiss, and ARIA dialog roles | `components/ui.jsx:64–76` |
+| **UX-14** | Typography | **DEFERRED (Backlog)** | Sub-readable 9px uppercase table headers and metadata captions | `App.css:774, 800, 2438` |
+| **UX-15** | Accessibility (a11y) | **DEFERRED (Backlog)** | Low contrast ratio on `--muted` text on white ($3.83:1$, fails WCAG AA $4.5:1$) | `App.css:26` |
+| **UX-16** | Interaction / Feedback | **DEFERRED (Backlog)** | Blocking native browser `alert()` and `confirm()` dialogs across all workflows | `App.jsx:1233`, `ExpensesPage.jsx:149`, `StaffAccess.jsx:52` |
+| **UX-17** | Iconography | **DEFERRED (Backlog)** | Mixed glyph systems (geometric text characters vs colorful OS emoji) in sidebar | `App.jsx:103–115` |
+| **UX-18** | Mobile Layout | **DEFERRED (Backlog)** | Fixed 72px sidebar on smartphones instead of an off-canvas drawer | `App.css:1335, 1981` |
 
 ---
 
@@ -598,18 +598,46 @@ The approved Phase 1 set of 6 items has been implemented with individual, review
    - Conditionally rendered `PeriodFilter` only when `activeTab` belongs to `PERIOD_FILTER_TABS`.
    - Topbar no longer displays inactive date range filters on academic tabs (`Timetable`, `Live Class`, `Assignments`, `Exams`, `Reviews`) or `Admin`.
 
-### Deferred Backlog (Pass 2+)
-All remaining items from this audit (`UX-06`, `UX-08` through `UX-18`) are deferred to subsequent passes:
-- `UX-06`: Topbar subtitle dynamic context
-- `UX-08`: Elimination of duplicate H1/H2 page headers in Academy Suite
-- `UX-09`: Empty states for search/filter in Enrollment and Fee Collection
-- `UX-10`: Normalization of loading spinners/skeletons across all views
-- `UX-11`: Consolidation of error banner CSS classes
-- `UX-12`: Elimination of redundant `setLoading(true)` on mount (oxlint warnings)
-- `UX-13`: Modal keyboard dismiss (`Escape`), backdrop click dismiss, and ARIA attributes
-- `UX-14`: 9px uppercase typography bump
-- `UX-15`: Contrast ratio adjustment on `--muted` text
-- `UX-16`: Custom confirmation dialogs replacing native browser `confirm()`
-- `UX-17`: Sidebar icon coherence (Unicode glyphs vs emoji)
-- `UX-18`: Comprehensive mobile drawer overhaul
+### 15.2 Implementation Pass 2 (Should-Fix Scope)
+
+Implemented as three focused, non-conflicting pull requests:
+
+#### PR A — Header & topbar cleanup (`fix/step14-pass2-headers`, PR #15)
+1. **UX-06**: `fix(ux-06): make topbar subtitle dynamically reflect the active tab`
+   - Added `TAB_SUBTITLES` mapping in `src/App.jsx` specifying purpose subtitles for all 12 modules.
+   - Subtitle dynamically changes based on `activeTab`, replacing the monolithic "Oksy Academy financial management" label.
+2. **UX-08**: `fix(ux-08): eliminate duplicate h2 page-headers in academy suite`
+   - Removed redundant `<h2>` page-headers from `TimetablePage`, `AssignmentsPage`, `ExamsPage`, `ReviewsPage`, and `LiveClassPage`.
+   - Repositioned header action buttons into `.toolbar-actions` where appropriate, preserving full functionality while establishing single-heading hierarchy.
+
+#### PR B — Tables, loading & empty states (`fix/step14-pass2-tables`, PR #16)
+1. **UX-09**: `fix(ux-09, ux-10): add empty states and loading rows to finance tables`
+   - Added query-aware empty state rows (`table-empty`) to `EnrollmentPage` and `FeeCollectionPage` matching `ExpensesPage`.
+2. **UX-10**: Standardized table loading indicators across finance views (`EnrollmentPage`, `FeeCollectionPage`, `ExpensesPage`, `BankingPage`) and Academy Suite pages (`TimetablePage`, `AssignmentsPage`, `ExamsPage`, `ReviewsPage`, `LiveClassPage`).
+3. **UX-12**: `fix(ux-10, ux-12): standardize loading states and eliminate redundant setLoading in academy pages` & `fix(ux-12): clear oxlint set-state-in-effect in notification bell`
+   - Initialized loading state as `useState(true)` on mount and removed redundant synchronous `setLoading(true)` calls inside effects.
+   - Refactored mount effects to use async cancellation patterns and wrapped handlers in `useCallback`.
+   - Cleared **all 7 pre-existing oxlint warnings** across `LiveClassPage`, `TimetablePage`, `AssignmentsPage`, `ReviewsPage`, `NotificationBell`, and `ExamsPage`.
+
+#### PR C — Forms, error banners & modal accessibility (`fix/step14-pass2-forms-modal`, PR #17)
+1. **UX-11**: `fix(ux-11): consolidate error banner styling and components across finance and academy forms`
+   - Unified `.form-error-banner` and `.auth-message.error` CSS styling in `src/App.css` (8px border-radius, 10px 12px padding, 11px font-size, 600 weight, 1.5 line-height).
+   - Created reusable `<ErrorBanner>` component with `role="alert"` in `src/components/ui.jsx`.
+   - Replaced scattered error markup across `FeeCollectionPage`, `ExpensesPage`, `EnrollmentPage`, `BankingPage`, `AdminPage`, `TimetablePage`, `AssignmentsPage`, `ExamsPage`, `ReviewsPage`, and `StaffAccess`.
+2. **UX-13**: `fix(ux-13): enhance modal accessibility with escape dismiss, backdrop click, and focus trapping`
+   - Enhanced `Modal` component in `src/components/ui.jsx`:
+     - Added `Escape` key listener on mount.
+     - Added backdrop click-outside dismiss on `.modal-overlay`.
+     - Added `role="dialog"`, `aria-modal="true"`, and `aria-labelledby` linked to the heading via `useId()`.
+     - Added `aria-label="Close modal"` to the close button.
+     - Implemented focus trapping for `Tab` and `Shift+Tab` cycling through interactive children, focusing the first interactive element on open and restoring focus to the trigger element on unmount.
+
+### Deferred Backlog (Pass 3+ / Nice-to-Have)
+The following items remain backlogged as approved for deferred passes:
+- `UX-14`: Typography bump (sub-readable 9px uppercase table headers)
+- `UX-15`: Contrast ratio adjustment on `--muted` text ($3.83:1 \to \ge 4.5:1$)
+- `UX-16`: Custom non-blocking dialogs replacing native browser `alert()` and `confirm()`
+- `UX-17`: Iconography coherence (Unicode glyphs vs emoji in sidebar)
+- `UX-18`: Comprehensive mobile drawer overhaul (collapsible responsive navigation)
+
 
