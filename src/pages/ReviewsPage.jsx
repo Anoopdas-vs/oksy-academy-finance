@@ -72,14 +72,6 @@ export default function ReviewsPage({ access }) {
 
   return (
     <section className="page">
-      <div className="page-header">
-        <div>
-          <h2>Faculty Reviews</h2>
-          <p>{isStudent ? "Rate your faculty — feedback is anonymised in reports." : "Student feedback and rating trends."}</p>
-        </div>
-        {isStudent && !pending && <button className="button primary" onClick={() => setShowForm(true)}>+ Add review</button>}
-      </div>
-
       {pending && (
         <div className="empty-state">
           <div className="empty-icon">⭐</div>
@@ -91,6 +83,13 @@ export default function ReviewsPage({ access }) {
 
       {!pending && (
         <>
+          {isStudent && (
+            <div className="toolbar" style={{ marginBottom: "1rem" }}>
+              <div className="toolbar-actions">
+                <button className="button primary" onClick={() => setShowForm(true)}>+ Add review</button>
+              </div>
+            </div>
+          )}
           {byFaculty.length > 0 && (
             <div className="table-card">
               <div className="card-heading"><div><h3>Averages</h3></div></div>

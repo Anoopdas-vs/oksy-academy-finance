@@ -237,11 +237,6 @@ export default function ExamsPage({ access, batches = [] }) {
   // ---------- render: exam list ----------
   return (
     <section className="page">
-      <div className="page-header">
-        <div><h2>Exams</h2><p>{canManage ? "Create timed MCQ exams and evaluate results." : "Your exams and results."}</p></div>
-        {canManage && !pending && <button className="button primary" onClick={openCreate}>+ Create exam</button>}
-      </div>
-
       {pending && (
         <div className="empty-state">
           <div className="empty-icon">📝</div>
@@ -252,7 +247,15 @@ export default function ExamsPage({ access, batches = [] }) {
       {err && <div className="auth-message error">{err}</div>}
 
       {!pending && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: "1rem" }}>
+        <>
+          {canManage && (
+            <div className="toolbar" style={{ marginBottom: "1rem" }}>
+              <div className="toolbar-actions">
+                <button className="button primary" onClick={openCreate}>+ Create exam</button>
+              </div>
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: "1rem" }}>
           {exams.filter((e) => !isStudent || e.status === "published").map((ex) => {
             const at = isStudent ? attemptFor(ex.id) : null;
             return (
@@ -300,6 +303,7 @@ export default function ExamsPage({ access, batches = [] }) {
           })}
           {exams.length === 0 && <div className="table-card table-empty" style={{ padding: "2rem" }}>No exams yet.</div>}
         </div>
+        </>
       )}
 
       {modal === "exam" && (
