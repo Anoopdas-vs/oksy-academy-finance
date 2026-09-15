@@ -116,6 +116,17 @@ const NAV_BASE = [
 
 const ACCOUNTS = ["HDFC", "ICICI", "Cash", "Healthcare"];
 
+// Tabs where date-range filtering applies (financial and reporting views).
+// Academic suite and Admin manage their own temporal scoping or lists.
+const PERIOD_FILTER_TABS = new Set([
+  HOME,
+  "Enrollment",
+  "Fee Collection",
+  "Expenses",
+  "Banking",
+  "Reports",
+]);
+
 export default function App() {
   const { loading, session, profile, profileError, signOut } = useAuth();
 
@@ -1316,7 +1327,9 @@ function AppShell() {
             </div>
           </div>
           <div className="topbar-right">
-            <PeriodFilter period={period} onChange={setPeriod} />
+            {PERIOD_FILTER_TABS.has(activeTab) && (
+              <PeriodFilter period={period} onChange={setPeriod} />
+            )}
             <NotificationBell onNavigate={(tab) => access.canOpen(tab) && setActiveTab(tab)} />
             <div className="top-user">
               <span className="top-user-avatar">
