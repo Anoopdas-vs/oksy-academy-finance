@@ -116,6 +116,17 @@ const NAV_BASE = [
 
 const ACCOUNTS = ["HDFC", "ICICI", "Cash", "Healthcare"];
 
+// Tabs where date-range filtering applies (financial and reporting views).
+// Academic suite and Admin manage their own temporal scoping or lists.
+const PERIOD_FILTER_TABS = new Set([
+  HOME,
+  "Enrollment",
+  "Fee Collection",
+  "Expenses",
+  "Banking",
+  "Reports",
+]);
+
 export default function App() {
   const { loading, session, profile, profileError, signOut } = useAuth();
 
@@ -341,7 +352,7 @@ function AppShell() {
     setDataLoading(true);
     try {
       const needCollections = access.financials || access.canOpen("Fee Collection");
-      const needExpenses = access.financials;
+      const needExpenses = access.financials || access.canOpen("Expenses");
 
       const [studentRows, collectionRows, batchRows, expenseRows, categoryRows, settings] =
         await Promise.all([
@@ -1286,8 +1297,14 @@ function AppShell() {
             </div>
           </div>
 
-          <button className="button secondary full sign-out" onClick={signOut}>
-            Sign Out
+          <button
+            className="button secondary full sign-out"
+            onClick={signOut}
+            title="Sign Out"
+            aria-label="Sign Out"
+          >
+            <span className="sign-out-text">Sign Out</span>
+            <span className="sign-out-icon" aria-hidden="true">⎋</span>
           </button>
 
           <div className="brand-footer">
@@ -1310,14 +1327,27 @@ function AppShell() {
             </div>
           </div>
           <div className="topbar-right">
-            <PeriodFilter period={period} onChange={setPeriod} />
+            {PERIOD_FILTER_TABS.has(activeTab) && (
+              <PeriodFilter period={period} onChange={setPeriod} />
+            )}
             <NotificationBell onNavigate={(tab) => access.canOpen(tab) && setActiveTab(tab)} />
             <div className="top-user">
               <span className="top-user-avatar">
                 {(profile.full_name || profile.email || "?").charAt(0).toUpperCase()}
               </span>
-              {profile.full_name || profile.email}
+              <span className="top-user-name">
+                {profile.full_name || profile.email}
+              </span>
             </div>
+            <button
+              className="top-sign-out"
+              onClick={signOut}
+              title="Sign Out"
+              aria-label="Sign Out"
+            >
+              <span className="top-sign-out-text">Sign Out</span>
+              <span className="top-sign-out-icon" aria-hidden="true">⎋</span>
+            </button>
           </div>
         </header>
 

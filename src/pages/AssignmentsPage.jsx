@@ -312,7 +312,10 @@ export default function AssignmentsPage({ access, batches = [] }) {
       )}
 
       {modal === "grade" && current?.sub && (
-        <Modal title="Grade submission" onClose={() => setModal(null)}>
+        <Modal
+          title={current.sub?.student?.full_name ? `Grade submission — ${current.sub.student.full_name}` : "Grade submission"}
+          onClose={() => setModal(null)}
+        >
           <form className="form-grid" onSubmit={doGrade}>
             {err && <div className="form-error-banner">{err}</div>}
             {current.sub.link && <p><a href={current.sub.link} target="_blank" rel="noreferrer">{current.sub.link}</a></p>}
@@ -339,7 +342,7 @@ export default function AssignmentsPage({ access, batches = [] }) {
               {subsFor(current.id).length === 0 && <tr><td colSpan={4} className="table-empty">No submissions yet.</td></tr>}
               {subsFor(current.id).map((s) => (
                 <tr key={s.id}>
-                  <td>{s.student_id.slice(0, 8)}…</td>
+                  <td>{s.student?.full_name || s.student?.email || `${s.student_id.slice(0, 8)}…`}</td>
                   <td>{(s.submitted_at || "").slice(0, 10)}{s.is_late ? " · late" : ""}</td>
                   <td>{s.status === "graded" ? `${s.marks}/${current.max_marks}` : "Submitted"}</td>
                   <td className="row-actions">

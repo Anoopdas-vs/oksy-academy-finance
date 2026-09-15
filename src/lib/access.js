@@ -73,6 +73,43 @@ export const DEFAULT_ROLE_AREAS = {
   professional: ["Pulse", "Timetable", "Live Class", "Assignments", "Exams", "Reviews"],
 };
 
+export const ACADEMY_SUITE_AREAS = [
+  "Timetable",
+  "Live Class",
+  "Assignments",
+  "Exams",
+  "Reviews",
+];
+
+export function resolveRoleAreas(settingsRoleAreas = {}) {
+  if (!settingsRoleAreas || typeof settingsRoleAreas !== "object") {
+    return { ...DEFAULT_ROLE_AREAS };
+  }
+  const isModern = Number(settingsRoleAreas._v) >= 2;
+  const result = { ...DEFAULT_ROLE_AREAS };
+
+  for (const [role, configured] of Object.entries(settingsRoleAreas)) {
+    if (role === "_v" || !Array.isArray(configured)) continue;
+
+    if (isModern) {
+      result[role] = [...configured];
+    } else {
+      // Legacy config without _v: 2. If it contains none of the Academy Suite areas,
+      // backfill any Academy Suite areas that exist in DEFAULT_ROLE_AREAS for this role.
+      const hasAnyAcademyArea = configured.some((a) => ACADEMY_SUITE_AREAS.includes(a));
+      if (!hasAnyAcademyArea && DEFAULT_ROLE_AREAS[role]) {
+        const defaultsToAdd = DEFAULT_ROLE_AREAS[role].filter((a) =>
+          ACADEMY_SUITE_AREAS.includes(a)
+        );
+        result[role] = Array.from(new Set([...configured, ...defaultsToAdd]));
+      } else {
+        result[role] = [...configured];
+      }
+    }
+  }
+  return result;
+}
+
 // Reports a non-admin role may open (Admin/Owner open all).
 export const STAFF_REPORT_IDS = ["fee-collection", "receivables"];
 
@@ -84,7 +121,7 @@ export function getAccess(profile, settings = {}) {
 
   const financials = approved && (isAdmin || !!profile?.can_view_financials);
 
-  const roleAreas = { ...DEFAULT_ROLE_AREAS, ...(settings.roleAreas || {}) };
+  const roleAreas = resolveRoleAreas(settings.roleAreas);
   let areas;
   if (isSuperAdmin) areas = ALL_AREAS;
   else if (!approved) areas = [];
