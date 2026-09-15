@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Input, Modal } from "../components/ui.jsx";
+import { ErrorBanner, Input, Modal } from "../components/ui.jsx";
 import { formatMoney } from "../lib/format.js";
 import { SearchBox, Pager } from "../components/SearchPager.jsx";
 import { usePagedList } from "../lib/usePagedList.js";
@@ -59,7 +59,7 @@ export default function ExpensesPage({
         <div className="form-card">
             <h3>New Expense</h3>
             <form onSubmit={onSubmit}>
-              {formError && <div className="form-error-banner">{formError}</div>}
+              <ErrorBanner error={formError} />
               <Input label="Date" type="date" value={form.date} onChange={(v) => set({ date: v })} required />
               <div className="field">
                 <label>Category</label>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Modal } from "../components/ui.jsx";
+import { ErrorBanner, Modal } from "../components/ui.jsx";
 import {
   fetchFacultyReviews,
   submitFacultyReview,
@@ -100,7 +100,7 @@ export default function ReviewsPage({ access }) {
           <p>Run <code>supabase/migration-academy-suite-v2.sql</code> to enable reviews.</p>
         </div>
       )}
-      {err && <div className="auth-message error">{err}</div>}
+      <ErrorBanner error={err} />
 
       {!pending && (
         <>
@@ -156,7 +156,7 @@ export default function ReviewsPage({ access }) {
       {showForm && (
         <Modal title="Rate a faculty member" onClose={() => setShowForm(false)}>
           <form className="form-grid" onSubmit={submit}>
-            {err && <div className="form-error-banner">{err}</div>}
+            <ErrorBanner error={err} />
             <div className="field">
               <label>Faculty</label>
               <select value={form.faculty_id} onChange={(e) => setForm({ ...form, faculty_id: e.target.value })} required>

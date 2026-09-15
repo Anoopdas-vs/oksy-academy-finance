@@ -1,5 +1,5 @@
 import React from "react";
-import { StatusBadge, Input, Modal } from "../components/ui.jsx";
+import { ErrorBanner, StatusBadge, Input, Modal } from "../components/ui.jsx";
 import { formatMoney } from "../lib/format.js";
 import { SearchBox, Pager } from "../components/SearchPager.jsx";
 import { usePagedList } from "../lib/usePagedList.js";
@@ -115,7 +115,7 @@ export default function EnrollmentPage({
       {showForm && (
         <Modal title={editingStudent ? "Edit Student" : "New Student"} onClose={onCancel}>
           <form className="form-grid" onSubmit={onSave}>
-            {formError && <div className="form-error-banner">{formError}</div>}
+            <ErrorBanner error={formError} />
             <Input label="Student ID" value={form.id} onChange={(v) => set({ id: v })} required />
             <div className="field">
               <label>Batch</label>

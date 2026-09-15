@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Modal, Input } from "../components/ui.jsx";
+import { ErrorBanner, Modal, Input } from "../components/ui.jsx";
 import { today } from "../lib/format.js";
 import {
   fetchAssignments,
@@ -183,7 +183,7 @@ export default function AssignmentsPage({ access, batches = [] }) {
           <p>Run <code>supabase/migration-academy-suite-v2.sql</code> to enable assignments.</p>
         </div>
       )}
-      {err && <div className="auth-message error">{err}</div>}
+      <ErrorBanner error={err} />
 
       {!pending && (
         <>
@@ -260,7 +260,7 @@ export default function AssignmentsPage({ access, batches = [] }) {
       {modal === "create" && (
         <Modal title={createForm.id ? "Edit assignment" : "Create assignment"} onClose={() => setModal(null)}>
           <form className="form-grid" onSubmit={(e) => { e.preventDefault(); doSave(true); }}>
-            {err && <div className="form-error-banner">{err}</div>}
+            <ErrorBanner error={err} />
             <Input label="Title" value={createForm.title} onChange={(v) => setCreateForm({ ...createForm, title: v })} required />
             <div className="field">
               <label>Batch</label>
@@ -288,7 +288,7 @@ export default function AssignmentsPage({ access, batches = [] }) {
       {modal === "submit" && current && (
         <Modal title={`Submit: ${current.title}`} onClose={() => setModal(null)}>
           <form className="form-grid" onSubmit={doSubmit}>
-            {err && <div className="form-error-banner">{err}</div>}
+            <ErrorBanner error={err} />
             <Input label="Project / repo / drive URL" value={submitForm.link} onChange={(v) => setSubmitForm({ ...submitForm, link: v })} />
             <div className="field">
               <label>Attach a file (optional)</label>
@@ -324,7 +324,7 @@ export default function AssignmentsPage({ access, batches = [] }) {
           onClose={() => setModal(null)}
         >
           <form className="form-grid" onSubmit={doGrade}>
-            {err && <div className="form-error-banner">{err}</div>}
+            <ErrorBanner error={err} />
             {current.sub.link && <p><a href={current.sub.link} target="_blank" rel="noreferrer">{current.sub.link}</a></p>}
             {current.sub.file_path && <p><SubmissionFileLink path={current.sub.file_path} /></p>}
             {current.sub.notes && <p style={{ color: "var(--muted)" }}>{current.sub.notes}</p>}
