@@ -170,27 +170,6 @@ export default function TimetablePage({ access, batches = [], onOpenLiveClass })
 
   return (
     <section className="page">
-      <div className="page-header">
-        <div>
-          <h2>Timetable</h2>
-          <p>
-            {canManage
-              ? "Schedule classes, assign faculty and set join links."
-              : "Your weekly class schedule."}
-          </p>
-        </div>
-        {canManage && !pending && (
-          <div className="row-actions">
-            <button className="button secondary" onClick={openNotify}>
-              📣 Notify batch
-            </button>
-            <button className="button primary" onClick={openCreate}>
-              + Schedule class
-            </button>
-          </div>
-        )}
-      </div>
-
       {pending && (
         <div className="empty-state">
           <div className="empty-icon">🗓️</div>
@@ -226,6 +205,16 @@ export default function TimetablePage({ access, batches = [], onOpenLiveClass })
                   <option key={b.id} value={b.name}>{b.name}</option>
                 ))}
               </select>
+            )}
+            {canManage && (
+              <div className="toolbar-actions">
+                <button className="button secondary" onClick={openNotify}>
+                  📣 Notify batch
+                </button>
+                <button className="button primary" onClick={openCreate}>
+                  + Schedule class
+                </button>
+              </div>
             )}
           </div>
 

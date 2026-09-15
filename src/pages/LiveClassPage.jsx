@@ -66,12 +66,6 @@ export default function LiveClassPage({ access }) {
 
   return (
     <section className="page">
-      <div className="page-header">
-        <div>
-          <h2>Live Classes</h2>
-          <p>Today’s live sessions{canHost ? " — start a class to open the room and take attendance." : " — join when your class is live."}</p>
-        </div>
-      </div>
 
       {pending && (
         <div className="empty-state">
