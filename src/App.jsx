@@ -798,6 +798,13 @@ function AppShell() {
 
   /* ---------------- Bank reconciliation ---------------- */
 
+  // Full bank statement text to copy onto a matched fee collection's
+  // bank_reference field -- description plus any separate reference/UTR
+  // column, so staff can audit the collection against the statement
+  // without reopening the reconciliation screen.
+  const bankReferenceText = (line) =>
+    [line.description, line.reference].filter(Boolean).join(" ").trim().slice(0, 500);
+
   // Parse an uploaded statement, auto-match its lines against existing
   // collections / expenses / transfers, and store it.
   const uploadBankStatement = async (account, file) => {
@@ -819,6 +826,7 @@ function AppShell() {
         status: matches[i].status,
         match_kind: matches[i].match_kind || null,
         match_id: matches[i].match_id || null,
+        match_score: matches[i].match_score ?? null,
         matched_at: matches[i].status === "matched" ? new Date().toISOString() : null,
         matched_by: matches[i].status === "matched" ? profile.id : null,
       }));
@@ -835,6 +843,24 @@ function AppShell() {
         lineRows,
         profile.id
       );
+
+      // Auto-matched collections get the full bank line description/
+      // reference written onto them as a permanent audit trail (see the
+      // "Fix Bank Reconciliation Matching Logic" brief) -- same as a
+      // manual match/classification does below.
+      const collectionBankRefs = parsed.lines
+        .map((ln, i) => ({ ln, m: matches[i] }))
+        .filter(({ m }) => m.status === "matched" && m.match_kind === "collection");
+      if (collectionBankRefs.length) {
+        await Promise.all(
+          collectionBankRefs.map(({ ln, m }) =>
+            updateCollection(m.match_id, {
+              bank_reference: bankReferenceText(ln),
+            })
+          )
+        );
+      }
+
       await Promise.all([loadData(), loadBankData()]);
     } catch (err) {
       setDataError(friendlyError(err));
@@ -854,6 +880,9 @@ function AppShell() {
 
       // Link to a record that already exists (no new record created).
       if (input.kind === "link") {
+        if (input.linkKind === "collection") {
+          await updateCollection(input.linkId, { bank_reference: bankReferenceText(line) });
+        }
         await updateBankStatementLine(line.id, {
           status: "matched",
           match_kind: input.linkKind,
@@ -881,6 +910,7 @@ function AppShell() {
             account: line.account,
             amount,
             reference: line.reference || `Bank: ${line.description || ""}`.slice(0, 120),
+            bank_reference: bankReferenceText(line),
           },
           profile.id
         );
