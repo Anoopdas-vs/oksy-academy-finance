@@ -6,7 +6,7 @@ import StudentPicker from "../components/StudentPicker.jsx";
 import { SearchBox, Pager } from "../components/SearchPager.jsx";
 import { usePagedList } from "../lib/usePagedList.js";
 import { downloadTemplate } from "../lib/templates.js";
-import { reconciliationSummary, matchKindLabel, matchedRecordDetail } from "../lib/reconcile.js";
+import { reconciliationSummary, matchKindLabel, matchedRecordDetail, reviewCandidatesDetail, bankReferenceMismatches } from "../lib/reconcile.js";
 import { outstanding } from "../lib/fees.js";
 
 const ACCOUNTS = ["HDFC", "ICICI", "Cash", "Healthcare"];
@@ -361,6 +361,8 @@ function ReconcileView({
         </div>
       )}
 
+      <MismatchReport data={data} />
+
       {bankStatements.map((st) => {
         const lines = (linesByStatement.get(st.id) || []).slice().sort((a, b) => {
           if (a.txn_date !== b.txn_date) return a.txn_date < b.txn_date ? -1 : 1;
@@ -378,7 +380,14 @@ function ReconcileView({
                   {summary.reconciled ? (
                     <span className="mini-tag ok">Reconciled</span>
                   ) : (
-                    <span className="mini-tag warn">{summary.openCount} unmatched</span>
+                    <>
+                      {summary.openCount > 0 && (
+                        <span className="mini-tag warn">{summary.openCount} unmatched</span>
+                      )}
+                      {summary.reviewCount > 0 && (
+                        <span className="mini-tag warn">{summary.reviewCount} needs review</span>
+                      )}
+                    </>
                   )}
                 </h3>
                 <p>{st.file_name}</p>
@@ -422,7 +431,7 @@ function ReconcileView({
                 </thead>
                 <tbody>
                   {lines.map((ln) => (
-                    <tr key={ln.id} className={ln.status === "unmatched" ? "row-open" : ""}>
+                    <tr key={ln.id} className={ln.status === "unmatched" || ln.status === "review" ? "row-open" : ""}>
                       <td>{ln.seq}</td>
                       <td>{ln.txn_date}</td>
                       <td className="desc-cell">{ln.description}</td>
@@ -430,10 +439,10 @@ function ReconcileView({
                       <td className="amount-positive">{ln.deposit ? formatMoney(ln.deposit) : ""}</td>
                       <td><StatusTag line={ln} data={data} students={students} /></td>
                       <td className="row-actions">
-                        {isAdmin && ln.status === "unmatched" && (
+                        {isAdmin && (ln.status === "unmatched" || ln.status === "review") && (
                           <>
                             <button className="button secondary small" onClick={() => setClassifying(ln)}>
-                              Classify
+                              {ln.status === "review" ? "Resolve" : "Classify"}
                             </button>
                             <button className="button ghost small" onClick={() => onIgnoreLine(ln, true)}>
                               Ignore
@@ -495,6 +504,7 @@ function StatusTag({ line, data, students }) {
   const [tip, setTip] = useState(null); // { x, y, flip } | null
 
   if (status === "ignored") return <span className="mini-tag">Ignored</span>;
+  if (status === "review") return <ReviewTag line={line} data={data} students={students} />;
   if (status !== "matched" && status !== "classified") {
     return <span className="mini-tag warn">Unmatched</span>;
   }
@@ -544,6 +554,106 @@ function StatusTag({ line, data, students }) {
           document.body
         )}
     </span>
+  );
+}
+
+// Tag for a bank line the auto-matcher deliberately refused to guess on --
+// two or more app records share the amount and land on the same date, and
+// the payer-identity signal wasn't decisive enough to pick between them.
+// Hovering shows the tied candidates; "Resolve" (in the row actions) opens
+// the same Classify modal used for unmatched lines to confirm one by hand.
+function ReviewTag({ line, data, students }) {
+  const [tip, setTip] = useState(null);
+  const detail = reviewCandidatesDetail(line, data, students);
+
+  const show = (e) => {
+    if (!detail) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const flip = r.bottom > window.innerHeight - 200;
+    const x = Math.max(8, Math.min(r.left, window.innerWidth - 332));
+    setTip({ x, y: flip ? r.top : r.bottom, flip });
+  };
+  const hide = () => setTip(null);
+
+  return (
+    <span
+      className={`mini-tag warn${detail ? " match-tag" : ""}`}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+      tabIndex={detail ? 0 : undefined}
+    >
+      Needs review
+      {detail && tip &&
+        createPortal(
+          <span
+            className="match-tip"
+            style={{
+              left: tip.x,
+              top: tip.flip ? undefined : tip.y + 6,
+              bottom: tip.flip ? window.innerHeight - tip.y + 6 : undefined,
+            }}
+          >
+            <span className="match-tip-title">{detail.title}</span>
+            {detail.rows.map((row, i) => (
+              <span className="match-tip-row" key={`${row.k}-${i}`}>
+                <span className="match-tip-k">{row.k}</span>
+                <span className="match-tip-v">{row.v}</span>
+              </span>
+            ))}
+          </span>,
+          document.body
+        )}
+    </span>
+  );
+}
+
+// Re-verification report: fee collections whose bank_reference (the UPI/
+// bank description copied over on match) doesn't textually match their own
+// student_name -- lets staff spot a wrong historical match, or a case where
+// this feature is disabled/incomplete, without opening each reconciliation
+// screen line by line. See the "Fix Bank Reconciliation Matching Logic"
+// brief, acceptance criterion on re-verifying existing matches.
+function MismatchReport({ data }) {
+  const [open, setOpen] = useState(false);
+  const mismatches = useMemo(
+    () => bankReferenceMismatches(data.collections || []),
+    [data.collections]
+  );
+  if (!mismatches.length) return null;
+
+  return (
+    <div className="table-card recon-mismatch">
+      <div className="card-heading between">
+        <div>
+          <h3>
+            <span className="mini-tag warn">{mismatches.length}</span> possible reference mismatches
+          </h3>
+          <p>Fee collections whose bank reference doesn't look like the student's name.</p>
+        </div>
+        <button className="button secondary small" onClick={() => setOpen((v) => !v)}>
+          {open ? "Hide" : "Show"}
+        </button>
+      </div>
+      {open && (
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Student</th><th>Amount</th><th>Bank reference</th></tr>
+          </thead>
+          <tbody>
+            {mismatches.map((m) => (
+              <tr key={m.id}>
+                <td>{m.date}</td>
+                <td>{m.student_name}</td>
+                <td>{formatMoney(m.amount)}</td>
+                <td className="desc-cell">{m.bank_reference}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }
 

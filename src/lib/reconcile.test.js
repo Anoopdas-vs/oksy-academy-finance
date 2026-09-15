@@ -3,7 +3,15 @@
 // (node:test); `npm test` needs no extra dependency.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { accountLedger, bookBalanceAsOf, autoMatch, reconciliationSummary } from "./reconcile.js";
+import {
+  accountLedger,
+  bookBalanceAsOf,
+  autoMatch,
+  reconciliationSummary,
+  nameSimilarity,
+  identityMatchScore,
+  bankReferenceMismatches,
+} from "./reconcile.js";
 
 describe("accountLedger", () => {
   test("collections are positive, expenses negative, transfers signed by direction", () => {
@@ -131,5 +139,118 @@ describe("reconciliationSummary", () => {
     const result = reconciliationSummary(statement, lines, data);
     assert.equal(result.difference, 200);
     assert.equal(result.reconciled, false);
+  });
+});
+describe("identity matching (payer name vs bank description)", () => {
+  test("a UPI VPA local-part scores high against the matching first name", () => {
+    const score = identityMatchScore(
+      "UPI/621570429059/UPI/fahmidat0181@ok/BANK OF INDIA/AXIc2b74e1b1d7f4e569bdc565c1cb1b678",
+      "",
+      "Fahmida"
+    );
+    assert.ok(score > 0.6, `expected a strong match, got ${score}`);
+  });
+
+  test("the same VPA scores low against an unrelated name", () => {
+    const score = identityMatchScore(
+      "UPI/621570429059/UPI/fahmidat0181@ok/BANK OF INDIA/AXIc2b74e1b1d7f4e569bdc565c1cb1b678",
+      "",
+      "Fasila PM"
+    );
+    assert.ok(score < 0.4, `expected a weak match, got ${score}`);
+  });
+
+  test("nameSimilarity treats a shared prefix as a strong signal", () => {
+    assert.ok(nameSimilarity("fahmidat", "fahmida") > 0.8);
+  });
+});
+
+describe("autoMatch — same-amount, same-day collision (regression, Fahmida/Fasila case)", () => {
+  // Reproduces the bug from the task brief: Fahmida paid Rs 500 on
+  // 2026-08-03, Fasila PM paid Rs 500 on 2026-08-04. The old amount-only
+  // matcher paired the bank line with whichever collection it found first,
+  // regardless of date or payer -- here that meant Fahmida's payment got
+  // matched to Fasila's collection record.
+  const data = {
+    collections: [
+      { id: 101, account: "ICICI", date: "2026-08-03", amount: 500, student_name: "Fahmida" },
+      { id: 102, account: "ICICI", date: "2026-08-04", amount: 500, student_name: "Fasila PM" },
+    ],
+    expenses: [],
+    transfers: [],
+  };
+  const bankLine = {
+    date: "2026-08-03",
+    description: "UPI/621570429059/UPI/fahmidat0181@ok/BANK OF INDIA/AXIc2b74e1b1d7f4e569bdc565c1cb1b678",
+    reference: "",
+    deposit: 500,
+    withdrawal: 0,
+  };
+
+  test("matches to Fahmida's collection (correct date + payer identity), never Fasila's", () => {
+    const [result] = autoMatch([bankLine], "ICICI", data, 4);
+    assert.equal(result.status, "matched");
+    assert.equal(result.match_kind, "collection");
+    assert.equal(result.match_id, 101);
+  });
+
+  test("without any identity signal in the description, the same two candidates are flagged for review instead of guessed", () => {
+    const blankLine = { ...bankLine, description: "", reference: "" };
+    const [result] = autoMatch([blankLine], "ICICI", data, 4);
+    assert.equal(result.status, "review");
+    assert.equal(result.candidates.length, 2);
+    const ids = result.candidates.map((c) => c.match_id).sort();
+    assert.deepEqual(ids, [101, 102]);
+  });
+
+  test("two same-amount, same-day candidates with no decisive identity signal are never silently auto-matched", () => {
+    const sameDayData = {
+      collections: [
+        { id: 201, account: "ICICI", date: "2026-08-03", amount: 500, student_name: "Amina Rasheed" },
+        { id: 202, account: "ICICI", date: "2026-08-03", amount: 500, student_name: "Amina Basheer" },
+      ],
+      expenses: [],
+      transfers: [],
+    };
+    const ambiguousLine = {
+      date: "2026-08-03",
+      description: "UPI/1234/UPI/amina9876@ok/SBI/UTR1",
+      reference: "",
+      deposit: 500,
+      withdrawal: 0,
+    };
+    const [result] = autoMatch([ambiguousLine], "ICICI", sameDayData, 4);
+    // Both candidates are named "Amina" -- identity alone can't cleanly
+    // separate them, so this must not be guessed.
+    assert.equal(result.status, "review");
+  });
+});
+
+describe("bankReferenceMismatches", () => {
+  test("flags a collection whose bank_reference clearly names a different person", () => {
+    const collections = [
+      {
+        id: 1,
+        date: "2026-08-04",
+        student_name: "Fasila PM",
+        amount: 500,
+        bank_reference: "UPI/621570429059/UPI/fahmidat0181@ok/BANK OF INDIA/UTR1",
+      },
+      {
+        id: 2,
+        date: "2026-08-03",
+        student_name: "Fahmida",
+        amount: 500,
+        bank_reference: "UPI/621570429059/UPI/fahmidat0181@ok/BANK OF INDIA/UTR1",
+      },
+    ];
+    const mismatches = bankReferenceMismatches(collections);
+    assert.equal(mismatches.length, 1);
+    assert.equal(mismatches[0].id, 1);
+  });
+
+  test("collections without a bank_reference are ignored", () => {
+    const mismatches = bankReferenceMismatches([{ id: 1, student_name: "Anyone", amount: 100 }]);
+    assert.equal(mismatches.length, 0);
   });
 });
